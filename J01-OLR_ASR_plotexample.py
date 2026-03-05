@@ -67,6 +67,66 @@ def plot_radiative_imbalance(
     else:
         return fig, ax
 
+
+def compute IEEI(
+    olr_ds,
+    asr_ds,
+    account_for_leap: bool = False,
+):
+    """
+    Compute the integrated earth's energy imbalance (IEEI) from ASR and OLR fields.
+    """
+    assert olr_ds["time"] == asr_ds["time"], "OLR and ASR time fields are not identical"
+    time_ds = olr_ds["time"]
+
+    days_per_month = np.array([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
+    days_per_month_leap = np.array([31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
+    seconds_per_month = 60 * 60 * 24 * days_per_month
+    seconds_per_month_leap = 60 * 60 * 24 * days_per_month_leap
+
+    weights = xr.DataArray(
+        data=seconds_per_month,
+        dims=["month"],
+        coords={
+            "month": np.arange(12),
+        }
+    )
+    weights_leap = xr.DataArray(
+        data=seconds_per_month_leap,
+        dims=["month"],
+        coords={
+            "month": np.arange(12),
+        }
+    )
+
+    time_weights = []
+    if account_for_leap == False:
+        for _t in time_ds:
+            time_weights.append(weights.sel(month=_t['time.month']))
+    else:
+        for _t in time_ds:
+            if _t["time.year"] % 4 == 0:
+                time_weights.append(weights_leap.sel(month=_t['time.month']))
+            else:
+                time_weights.append(weights.sel(month=_t['time.month']))
+
+    # Duplicate the time dimension but with weights as values
+    weights_ds = xr.DataArray(
+        data=time_weights,
+
+    )
+
+    return time_weights
+
+
+def get_weights_by_month(
+    time_step,
+    weights,
+):
+
+    return weights.sel(month=time_step['time.month'])
+
+
 # %%
 
 olr = np.arange(0, 10, 0.5)  # Example ASR values
