@@ -75,7 +75,7 @@ def plot_radiative_imbalance(
         return fig, ax
 
 
-def compute IEEI(
+def compute_IEEI(
     olr_ds,
     asr_ds,
     account_for_leap: bool = False,
@@ -83,8 +83,24 @@ def compute IEEI(
     """
     Compute the integrated earth's energy imbalance (IEEI) from ASR and OLR fields.
     """
-    assert olr_ds["time"] == asr_ds["time"], "OLR and ASR time fields are not identical"
+    assert (olr_ds["time"] == asr_ds["time"]).all(), "OLR and ASR time fields are not identical"
     time_ds = olr_ds["time"]
+
+    weights = get_weights_by_month(time_ds, account_for_leap)
+    eei_ds = asr_ds - olr_ds
+    ieei_ds = np.cumsum(eei_ds * weights)
+
+    # Convert to Watt by multipling by the Earth's surface area
+    earth_radius = 6371e3 # meters
+    earth_SA = 4 * np.pi * earth_radius**2
+
+    return earth_SA * ieei_ds
+
+
+def get_weights_by_month(
+    time_ds,
+    account_for_leap: bool = False,
+):
 
     days_per_month = np.array([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
     days_per_month_leap = np.array([31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
@@ -95,14 +111,14 @@ def compute IEEI(
         data=seconds_per_month,
         dims=["month"],
         coords={
-            "month": np.arange(12),
+            "month": np.arange(1,13),
         }
     )
     weights_leap = xr.DataArray(
         data=seconds_per_month_leap,
         dims=["month"],
         coords={
-            "month": np.arange(12),
+            "month": np.arange(1,13),
         }
     )
 
@@ -120,18 +136,30 @@ def compute IEEI(
     # Duplicate the time dimension but with weights as values
     weights_ds = xr.DataArray(
         data=time_weights,
-
+        dims="time",
+        coords={
+            "time":time_ds,
+        },
     )
+    return weights_ds
 
-    return time_weights
 
-
-def get_weights_by_month(
-    time_step,
-    weights,
+def plot_eei(
+    eei_ds,
+    ax=None,
+    plot_kwargs=None,
+    fontsize=14,
+    # cmap=sns.color_palette("viridis", as_cmap=True),
 ):
-
-    return weights.sel(month=time_step['time.month'])
+    if ax is None:
+        fig, ax = plt.subplots(1, 1, figsize=(8,5))
+    ax.plot(
+        eei_ds["time"],
+        eei_ds,
+        # **plot_kwargs,
+    )
+    ax.set_xlabel("Time", fontsize=fontsize)
+    ax.set_ylabel("EEI (W)", fontsize=fontsize)
 
 
 # %%
