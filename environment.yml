@@ -7,6 +7,7 @@ dependencies:
   - scipy
   - xarray
   - matplotlib
+  - cartopy
   - bottleneck
   - dask
   - netcdf4
