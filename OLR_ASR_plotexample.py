@@ -11,9 +11,12 @@ def plot_radiative_imbalance(
     olr_da,
     asr_da,
     ax=None,
+    fig=None,
     plot_kwargs=None,
     fontsize=14,
     cmap=mpl.colormaps['viridis'],
+    add_colorbar=True,
+    monthly=True
 ):
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 5))
@@ -30,14 +33,33 @@ def plot_radiative_imbalance(
         zorder=5,
         linewidth=0.5,
     )
-    scatter = ax.scatter(
-        olr_da,
-        asr_da,
-        c=olr_da['time.year']+0.083*olr_da['time.month'], #fractional year coordinate
-        cmap=cmap,
-        zorder=10,
-        **plot_kwargs,
-    )
+
+    seasons = {'DJF':[12,1,2],'MAM':[3,4,5],'JJA':[6,7,8],'SON':[9,10,11]}
+    if monthly:
+        for (sea,mos),marker in zip(seasons.items(),['o','*','+','^']):
+            olr_dai = olr_da.sel(time=olr_da['time.month'].isin(mos))
+            asr_dai = asr_da.sel(time=asr_da['time.month'].isin(mos))
+            scatter = ax.scatter(
+                olr_dai,
+                asr_dai,
+                c=olr_dai['time.year']+0.083*olr_dai['time.month'], #fractional year coordinate
+                marker=marker,
+                cmap=cmap,
+                zorder=10,
+                label=sea,
+                **plot_kwargs,
+            )
+        ax.legend(bbox_to_anchor=[0.5,-0.3],loc='lower center',ncols=2)
+    else:
+        scatter = ax.scatter(
+            olr_da,
+            asr_da,
+            c=olr_da['time.year']+0.083*olr_da['time.month'], #fractional year coordinate
+            marker=marker,
+            cmap=cmap,
+            zorder=10,
+            **plot_kwargs,
+        )
 
     # Add a colorbar with discrete intervals and extend='both' keyword
     # bounds = pd.date_range(
@@ -50,11 +72,12 @@ def plot_radiative_imbalance(
         max(1,(olr_da['time.year'].max()-olr_da['time.year'].min())/255))
     norm = mpl.colors.BoundaryNorm(np.array(bounds), cmap.N, extend='both')
 
-    plt.colorbar(
-        mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
-        ax=ax, orientation='vertical',
-        label="Time",
-    )
+    if add_colorbar:
+        plt.colorbar(
+            mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
+            ax=ax, orientation='vertical',
+            label="Time",
+        )
 
     # Plot the 1:1 line
     min_val = min(olr_da.min().item(), asr_da.min().item())
@@ -66,7 +89,7 @@ def plot_radiative_imbalance(
         linestyle="--",
         zorder=0,
     )
-    ax.set_aspect("equal", adjustable="box")
+    #ax.set_aspect("equal", adjustable="box")
     ax.set_xlabel("OLR [Wm$^{-2}$]", fontsize=fontsize)
     ax.set_ylabel("ASR [Wm$^{-2}$]", fontsize=fontsize)
 
