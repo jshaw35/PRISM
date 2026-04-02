@@ -8,82 +8,11 @@ import matplotlib as mpl
 import seaborn as sns
 
 import logging
+from OLR_ASR_plotexample import plot_radiative_imbalance, plot_radiative_imbalance_annual
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
 # %%
-
-def plot_radiative_imbalance(
-    olr_da,
-    asr_da,
-    ax=None,
-    plot_kwargs=None,
-    fontsize=14,
-    cmap=mpl.colormaps['viridis'],
-):
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(10, 5))
-    else:
-        fig = None
-
-    if plot_kwargs is None:
-        plot_kwargs = {}
-
-    # Plot OLR vs ASR with color gradient for time dimension
-    ax.plot(
-        olr_da,
-        asr_da,
-        color="black",
-        alpha=0.5,
-        zorder=5,
-        linewidth=0.5,
-    )
-    scatter = ax.scatter(
-        olr_da,
-        asr_da,
-        # c=olr_da['time.year']+0.083*olr_da['time.month'], #fractional year coordinate
-        c=0.083*olr_da['time.month'], #fractional year coordinate
-        cmap=cmap,
-        zorder=10,
-        **plot_kwargs,
-    )
-
-    # Add a colorbar with discrete intervals and extend='both' keyword
-    # bounds = pd.date_range(
-    #     start=pd.to_datetime(olr_da["time"].min().data),
-    #     end=pd.to_datetime(olr_da["time"].max().data), 
-    #     periods=min(olr_da.sizes['time'],255)) 
-    bounds = np.arange(
-        olr_da['time.year'].min(),
-        olr_da['time.year'].max(),
-        max(1,(olr_da['time.year'].max()-olr_da['time.year'].min())/255))
-    norm = mpl.colors.BoundaryNorm(np.array(bounds), cmap.N, extend='both')
-
-    plt.colorbar(
-        mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
-        ax=ax, orientation='vertical',
-        label="Time",
-    )
-
-    # Plot the 1:1 line
-    min_val = min(olr_da.min().item(), asr_da.min().item())
-    max_val = max(olr_da.max().item(), asr_da.max().item())
-    ax.plot(
-        [min_val, max_val],
-        [min_val, max_val],
-        color="grey",
-        linestyle="--",
-        zorder=0,
-    )
-    ax.set_aspect("equal", adjustable="box")
-    ax.set_xlabel("OLR [Wm$^{-2}$]", fontsize=fontsize)
-    ax.set_ylabel("ASR [Wm$^{-2}$]", fontsize=fontsize)
-
-    if fig is None:
-        return ax
-    else:
-        return fig, ax
-
 
 def compute_IEEI(
     olr_ds,
@@ -198,19 +127,175 @@ if __name__ == "__main__":
         asr_ds = xr.open_mfdataset(asr_files)
         olr_ds = xr.open_mfdataset(olr_files)
         #
-        c_val = max(1,(olr_ds['time.year'].max()-olr_ds['time.year'].min())/255)
-        c_val2 = olr_ds['time.year']+0.083*olr_ds['time.month']
-        print("c_val: ", c_val)
-        print("c_val: ", c_val2)
-        print(olr_ds[olr_var])
-        fig, ax = plt.subplots(1, 1, figsize=(10, 4))
-        fig1, ax1 = plot_radiative_imbalance(
+
+        fig, axs = plt.subplots(1, 3, figsize=(12, 4))
+        plot_radiative_imbalance(
             olr_ds[olr_var].sel(spatial="G").compute(),
             asr_ds[asr_var].sel(spatial="G").compute(),
-            # ax=ax,
+            ax=axs[0],
         )
-        fig 
+        plot_radiative_imbalance(
+            olr_ds[olr_var].sel(spatial="SH").compute(),
+            asr_ds[asr_var].sel(spatial="SH").compute(),
+            ax=axs[1],
+        )
+        plot_radiative_imbalance(
+            olr_ds[olr_var].sel(spatial="NH").compute(),
+            asr_ds[asr_var].sel(spatial="NH").compute(),
+            ax=axs[2],
+        )
+        break
         fig1.savefig("figures/testfig.png")
         #
         break
     # %%
+fontsize = 14
+fig, axs = plt.subplots(1, 3, figsize=(12, 4))
+cax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+plot_radiative_imbalance(
+    olr_ds[olr_var].sel(spatial="G").compute(),
+    asr_ds[asr_var].sel(spatial="G").compute(),
+    ax=axs[0],
+    cax=cax,
+    plot_kwargs={"s": 5},
+    connected=False,
+)
+plot_radiative_imbalance(
+    olr_ds[olr_var].sel(spatial="SH").compute(),
+    asr_ds[asr_var].sel(spatial="SH").compute(),
+    ax=axs[1],
+    cax=cax,
+    plot_kwargs={"s": 5},
+    connected=False,
+)
+plot_radiative_imbalance(
+    olr_ds[olr_var].sel(spatial="NH").compute(),
+    asr_ds[asr_var].sel(spatial="NH").compute(),
+    ax=axs[2],
+    cax=cax,
+    plot_kwargs={"s": 5},
+    connected=False,
+)
+axs[0].set_title("Global", fontsize=fontsize)
+axs[1].set_title("SH", fontsize=fontsize)
+axs[2].set_title("NH", fontsize=fontsize)
+axs[1].set_ylabel("")
+axs[2].set_ylabel("")
+# %%
+fontsize = 14
+fig, axs = plt.subplots(1, 3, figsize=(12, 4))
+cax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+plot_radiative_imbalance_annual(
+    olr_ds[olr_var].sel(spatial="G").groupby("time.year").mean(),
+    asr_ds[asr_var].sel(spatial="G").groupby("time.year").mean(),
+    ax=axs[0],
+    cax=cax,
+    plot_kwargs={"s": 5},
+    connected=False,
+)
+plot_radiative_imbalance_annual(
+    olr_ds[olr_var].sel(spatial="SH").groupby("time.year").mean(),
+    asr_ds[asr_var].sel(spatial="SH").groupby("time.year").mean(),
+    ax=axs[1],
+    cax=cax,
+    plot_kwargs={"s": 5},
+    connected=False,
+)
+plot_radiative_imbalance_annual(
+    olr_ds[olr_var].sel(spatial="NH").groupby("time.year").mean(),
+    asr_ds[asr_var].sel(spatial="NH").groupby("time.year").mean(),
+    ax=axs[2],
+    cax=cax,
+    plot_kwargs={"s": 5},
+    connected=False,
+)
+axs[0].set_title("Global", fontsize=fontsize)
+axs[1].set_title("SH", fontsize=fontsize)
+axs[2].set_title("NH", fontsize=fontsize)
+axs[1].set_ylabel("")
+axs[2].set_ylabel("")
+# %%
+datapath = curc_cesm2_245_outpath
+
+asr_files = crawl_and_list(datapath, f".{asr_var}.")
+olr_files = crawl_and_list(datapath, f".{olr_var}.")
+#
+asr_ds = xr.open_mfdataset(asr_files)
+olr_ds = xr.open_mfdataset(olr_files)
+
+fontsize = 14
+fig, axs = plt.subplots(1, 3, figsize=(12, 4))
+cax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+plot_radiative_imbalance(
+    olr_ds[olr_var].sel(spatial="G").compute(),
+    asr_ds[asr_var].sel(spatial="G").compute(),
+    ax=axs[0],
+    cax=cax,
+    plot_kwargs={"s": 5},
+    connected=False,
+)
+plot_radiative_imbalance(
+    olr_ds[olr_var].sel(spatial="SH").compute(),
+    asr_ds[asr_var].sel(spatial="SH").compute(),
+    ax=axs[1],
+    cax=cax,
+    plot_kwargs={"s": 5},
+    connected=False,
+)
+plot_radiative_imbalance(
+    olr_ds[olr_var].sel(spatial="NH").compute(),
+    asr_ds[asr_var].sel(spatial="NH").compute(),
+    ax=axs[2],
+    cax=cax,
+    plot_kwargs={"s": 5},
+    connected=False,
+)
+axs[0].set_title("Global", fontsize=fontsize)
+axs[1].set_title("SH", fontsize=fontsize)
+axs[2].set_title("NH", fontsize=fontsize)
+axs[1].set_ylabel("")
+axs[2].set_ylabel("")
+# %%
+datapath = curc_ariseSAI_outpath
+
+asr_files = crawl_and_list(datapath, f"1p5K-SAI.001.cam.h0.{asr_var}.")
+olr_files = crawl_and_list(datapath, f"1p5K-SAI.001.cam.h0.{olr_var}.")
+#
+asr_ds = xr.open_mfdataset(asr_files)
+olr_ds = xr.open_mfdataset(olr_files)
+
+fontsize = 14
+fig, axs = plt.subplots(1, 3, figsize=(12, 4))
+cax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+plot_radiative_imbalance(
+    olr_ds[olr_var].sel(spatial="G").compute(),
+    asr_ds[asr_var].sel(spatial="G").compute(),
+    ax=axs[0],
+    cax=cax,
+    plot_kwargs={"s": 5},
+    connected=False,
+)
+plot_radiative_imbalance(
+    olr_ds[olr_var].sel(spatial="SH").compute(),
+    asr_ds[asr_var].sel(spatial="SH").compute(),
+    ax=axs[1],
+    cax=cax,
+    plot_kwargs={"s": 5},
+    connected=False,
+)
+plot_radiative_imbalance(
+    olr_ds[olr_var].sel(spatial="NH").compute(),
+    asr_ds[asr_var].sel(spatial="NH").compute(),
+    ax=axs[2],
+    cax=cax,
+    plot_kwargs={"s": 5},
+    connected=False,
+)
+axs[0].set_title("Global", fontsize=fontsize)
+axs[1].set_title("SH", fontsize=fontsize)
+axs[2].set_title("NH", fontsize=fontsize)
+axs[1].set_ylabel("")
+axs[2].set_ylabel("")
+# %%
+olr_ds["FLNT"].sel(spatial="G").groupby("time.year").mean().plot()
+asr_ds["FSNTOA"].sel(spatial="G").groupby("time.year").mean().plot()

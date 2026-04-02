@@ -16,7 +16,10 @@ def plot_radiative_imbalance(
     fontsize=14,
     cmap=mpl.colormaps['viridis'],
     add_colorbar=True,
-    monthly=True
+    cax=None,
+    monthly=True,
+    connected=True,
+    line11=True,
 ):
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 5))
@@ -25,14 +28,15 @@ def plot_radiative_imbalance(
         plot_kwargs = {}
 
     # Plot OLR vs ASR with color gradient for time dimension
-    ax.plot(
-        olr_da,
-        asr_da,
-        color="black",
-        alpha=0.5,
-        zorder=5,
-        linewidth=0.5,
-    )
+    if connected:
+        ax.plot(
+            olr_da,
+            asr_da,
+            color="black",
+            alpha=0.5,
+            zorder=5,
+            linewidth=0.5,
+        )
 
     seasons = {'DJF':[12,1,2],'MAM':[3,4,5],'JJA':[6,7,8],'SON':[9,10,11]}
     if monthly:
@@ -73,11 +77,18 @@ def plot_radiative_imbalance(
     norm = mpl.colors.BoundaryNorm(np.array(bounds), cmap.N, extend='both')
 
     if add_colorbar:
-        plt.colorbar(
-            mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
-            ax=ax, orientation='vertical',
-            label="Time",
-        )
+        if cax is None:
+            plt.colorbar(
+                mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
+                ax=ax, orientation='vertical',
+                label="Time",
+            )
+        else:
+            plt.colorbar(
+                mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
+                cax=cax, orientation='vertical',
+                label="Time",
+            )
 
     # Plot the 1:1 line
     min_val = min(olr_da.min().item(), asr_da.min().item())
@@ -92,6 +103,93 @@ def plot_radiative_imbalance(
     #ax.set_aspect("equal", adjustable="box")
     ax.set_xlabel("OLR [Wm$^{-2}$]", fontsize=fontsize)
     ax.set_ylabel("ASR [Wm$^{-2}$]", fontsize=fontsize)
+    if not line11:
+        ax.set_xlim(olr_da.min(), olr_da.max())
+        ax.set_ylim(asr_da.min(), asr_da.max())
+
+    if fig is None:
+        return ax
+    else:
+        return fig, ax
+
+
+def plot_radiative_imbalance_annual(
+    olr_da,
+    asr_da,
+    ax=None,
+    fig=None,
+    plot_kwargs=None,
+    fontsize=14,
+    cmap=mpl.colormaps['viridis'],
+    add_colorbar=True,
+    cax=None,
+    connected=True,
+    line11=True,
+):
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 5))
+
+    if plot_kwargs is None:
+        plot_kwargs = {}
+
+    # Plot OLR vs ASR with color gradient for year dimension
+    if connected:
+        ax.plot(
+            olr_da,
+            asr_da,
+            color="black",
+            alpha=0.5,
+            zorder=5,
+            linewidth=0.5,
+        )
+
+    scatter = ax.scatter(
+        olr_da,
+        asr_da,
+        c=olr_da['year'],
+        marker='o',
+        cmap=cmap,
+        zorder=10,
+        **plot_kwargs,
+    )
+
+    # Add a colorbar with discrete intervals and extend='both' keyword
+    bounds = np.arange(
+        olr_da['year'].min(),
+        olr_da['year'].max(),
+        max(1, (olr_da['year'].max() - olr_da['year'].min()) / 255),
+    )
+    norm = mpl.colors.BoundaryNorm(np.array(bounds), cmap.N, extend='both')
+
+    if add_colorbar:
+        if cax is None:
+            plt.colorbar(
+                mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
+                ax=ax, orientation='vertical',
+                label="Year",
+            )
+        else:
+            plt.colorbar(
+                mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
+                cax=cax, orientation='vertical',
+                label="Year",
+            )
+
+    # Plot the 1:1 line
+    min_val = min(olr_da.min(), asr_da.min())
+    max_val = max(olr_da.max(), asr_da.max())
+    ax.plot(
+        [min_val, max_val],
+        [min_val, max_val],
+        color="grey",
+        linestyle="--",
+        zorder=0,
+    )
+    ax.set_xlabel("OLR [Wm$^{-2}$]", fontsize=fontsize)
+    ax.set_ylabel("ASR [Wm$^{-2}$]", fontsize=fontsize)
+    if not line11:
+        ax.set_xlim(olr_da.min(), olr_da.max())
+        ax.set_ylim(asr_da.min(), asr_da.max())
 
     if fig is None:
         return ax
