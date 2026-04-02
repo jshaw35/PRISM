@@ -1,3 +1,4 @@
+# %%
 from pathlib import Path
 import os
 import xarray as xr
@@ -10,6 +11,7 @@ import logging
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
+# %%
 
 def plot_radiative_imbalance(
     olr_da,
@@ -179,11 +181,12 @@ def crawl_and_list(input_dir, file_string):
     return file_list
 
 
+# %%
 
 if __name__ == "__main__":
-    curc_lme_outpath = "/home/josh2250/kaydata/jshaw/RadInt_procdata/CESM_LME/"
-    curc_cesm2_245_outpath = "/home/josh2250/kaydata/jshaw/RadInt_procdata/CESM2_WACCM_SSP2-4.5/"
-    curc_ariseSAI_outpath = "/home/josh2250/kaydata/jshaw/RadInt_procdata/ARISE_SAI/"
+    curc_lme_outpath = "data/RadInt_procdata/CESM_LME/"
+    curc_cesm2_245_outpath = "data/RadInt_procdata/CESM2_WACCM_SSP2-4.5/"
+    curc_ariseSAI_outpath = "data/RadInt_procdata/ARISE_SAI/"
 
     asr_var = "FSNTOA"
     olr_var = "FLNT"
@@ -207,6 +210,7 @@ if __name__ == "__main__":
             # ax=ax,
         )
         fig 
-        fig1.savefig("/home/josh2250/projects/PRISM/testfig.png")
+        fig1.savefig("figures/testfig.png")
         #
         break
+    # %%
