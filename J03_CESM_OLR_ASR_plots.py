@@ -1,11 +1,16 @@
-# %%
+from pathlib import Path
+import os
 import xarray as xr
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import seaborn as sns
 
-# %%
+import logging
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+
+
 def plot_radiative_imbalance(
     olr_da,
     asr_da,
@@ -16,6 +21,8 @@ def plot_radiative_imbalance(
 ):
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 5))
+    else:
+        fig = None
 
     if plot_kwargs is None:
         plot_kwargs = {}
@@ -32,7 +39,8 @@ def plot_radiative_imbalance(
     scatter = ax.scatter(
         olr_da,
         asr_da,
-        c=olr_da['time.year']+0.083*olr_da['time.month'], #fractional year coordinate
+        # c=olr_da['time.year']+0.083*olr_da['time.month'], #fractional year coordinate
+        c=0.083*olr_da['time.month'], #fractional year coordinate
         cmap=cmap,
         zorder=10,
         **plot_kwargs,
@@ -162,30 +170,43 @@ def plot_eei(
     ax.set_ylabel("EEI (W)", fontsize=fontsize)
 
 
-# %%
+def crawl_and_list(input_dir, file_string):
+    file_list = []
+    for root, _, files in os.walk(input_dir):
+        for name in files:
+            if file_string in name:
+                file_list.append(os.path.join(root, name))
+    return file_list
 
 
-def main():
-    olr = np.arange(0, 10, 0.5)  # Example ASR values
-    asr = 0.5 * (olr**2)
-    
-    fig, ax = plot_radiative_imbalance(
-        olr_da=xr.DataArray(olr, dims=["time"], coords={"time": np.arange(len(olr))}),
-        asr_da=xr.DataArray(asr, dims=["time"], coords={"time": np.arange(len(asr))}),
-        plot_kwargs={"marker": "o", "linestyle": "solid"},
-    )
-    
-    # Get rid of the plot edges and add gridlines through the origin
-    ax.spines["top"].set_visible(False)
-    ax.spines["bottom"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    ax.spines["left"].set_visible(False)
-    ax.axhline(0, color="grey", linestyle="solid", linewidth=1.5)
-    ax.axvline(0, color="grey", linestyle="solid", linewidth=1.5)
-    ax.grid(True, which="both", linestyle="--", linewidth=0.5)
-    
-# %%
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    curc_lme_outpath = "/home/josh2250/kaydata/jshaw/RadInt_procdata/CESM_LME/"
+    curc_cesm2_245_outpath = "/home/josh2250/kaydata/jshaw/RadInt_procdata/CESM2_WACCM_SSP2-4.5/"
+    curc_ariseSAI_outpath = "/home/josh2250/kaydata/jshaw/RadInt_procdata/ARISE_SAI/"
 
+    asr_var = "FSNTOA"
+    olr_var = "FLNT"
+
+    for datapath in [curc_lme_outpath, curc_cesm2_245_outpath, curc_ariseSAI_outpath]:
+        asr_files = crawl_and_list(datapath, f".{asr_var}.")
+        olr_files = crawl_and_list(datapath, f".{olr_var}.")
+        #
+        asr_ds = xr.open_mfdataset(asr_files)
+        olr_ds = xr.open_mfdataset(olr_files)
+        #
+        c_val = max(1,(olr_ds['time.year'].max()-olr_ds['time.year'].min())/255)
+        c_val2 = olr_ds['time.year']+0.083*olr_ds['time.month']
+        print("c_val: ", c_val)
+        print("c_val: ", c_val2)
+        print(olr_ds[olr_var])
+        fig, ax = plt.subplots(1, 1, figsize=(10, 4))
+        fig1, ax1 = plot_radiative_imbalance(
+            olr_ds[olr_var].sel(spatial="G").compute(),
+            asr_ds[asr_var].sel(spatial="G").compute(),
+            # ax=ax,
+        )
+        fig 
+        fig1.savefig("/home/josh2250/projects/PRISM/testfig.png")
+        #
+        break
