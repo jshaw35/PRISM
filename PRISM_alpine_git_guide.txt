@@ -1,0 +1,82 @@
+================================================================================
+PRISM on CU Boulder Alpine - Git Reference Guide
+================================================================================
+
+REPOSITORY STRUCTURE
+--------------------
+- Parent repo:  git@github.com:andrewjbuggee/Python-Research.git
+- PRISM repo:   https://github.com/jshaw35/PRISM.git
+- PRISM lives inside: ~/Python-Research/rad_journal_club_paper/PRISM/
+- PRISM is a standalone repo nested inside Python-Research (not a git submodule)
+
+FIRST-TIME SETUP ON A NEW MACHINE OR EMPTY FOLDER
+--------------------------------------------------
+1. Clone Python-Research (if not already there):
+   git clone git@github.com:andrewjbuggee/Python-Research.git
+
+2. Navigate into it:
+   cd Python-Research
+
+3. Clone PRISM into the correct location:
+   git clone https://github.com/jshaw35/PRISM.git rad_journal_club_paper/PRISM
+
+4. Checkout your branch:
+   cd rad_journal_club_paper/PRISM
+   git checkout Andrew
+
+NOTE: You only need to do this ONCE. Files persist on Alpine between logins.
+
+ROUTINE USAGE (after first-time setup)
+---------------------------------------
+- Navigate to PRISM:
+    cd ~/Python-Research/rad_journal_club_paper/PRISM
+
+- Pull latest changes from GitHub:
+    git pull
+
+- See available branches:
+    git branch -a
+
+- Switch branches:
+    git checkout <branch-name>
+
+- Check current status:
+    git status
+
+PUSHING YOUR CHANGES TO GITHUB
+--------------------------------
+- Stage changes:
+    git add <filename>       # specific file
+    git add .                # all changes
+
+- Commit:
+    git commit -m "your message here"
+
+- Push:
+    git push origin Andrew   # replace Andrew with your branch name
+
+DEBUGGING CHECKLIST
+--------------------
+Problem: PRISM folder is empty
+  -> Run: ls -la rad_journal_club_paper/PRISM
+  -> If empty, re-clone: git clone https://github.com/jshaw35/PRISM.git rad_journal_club_paper/PRISM
+
+Problem: Can't see remote branches
+  -> Run: git fetch origin
+  -> Then: git branch -a
+
+Problem: Wrong remote URL
+  -> Run: git remote -v
+  -> Should point to https://github.com/jshaw35/PRISM.git
+  -> If wrong, fix with: git remote set-url origin https://github.com/jshaw35/PRISM.git
+
+Problem: Submodule errors when running git submodule update
+  -> PRISM is NOT a proper git submodule, it is a nested repo
+  -> Do not use git submodule commands for PRISM
+  -> Instead, cd into PRISM and use regular git commands
+
+Problem: git submodule update --init --recursive fails with pamtra2 error
+  -> There is a broken submodule entry in pyOptimalEstimation_examples-master
+  -> Avoid using --recursive; update submodules individually if needed
+
+================================================================================
