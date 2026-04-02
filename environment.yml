@@ -75,4 +75,6 @@ dependencies:
   - openssl
   - libstdcxx
   - ipykernel
+- pip:
+    - regionmask
 prefix: /projects/viha4393/software/anaconda/envs/prism
