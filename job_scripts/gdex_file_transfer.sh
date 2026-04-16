@@ -5,6 +5,9 @@
 # Example: ./sync_files.sh "*month_1*.TS.*" /gdex/data/d651059/ARISE-SAI-1.5 josh2250@login.rc.colorado.edu:/home/josh2250/kaydata/jshaw/RadInt_rawdata/ARISE_SAI/d651059/ARISE-SAI-1.5/
 # ^For correct directory level matching, make sure the source and target paths match up to the point where the pattern starts (e.g. /gdex/data/d651059/ARISE-SAI-1.5/).
 
+# Can look for files using find with -wholename to match the full path before executing this scripts.
+# e.g. find /gdex/data/d651045/CESM2-WACCM-SSP245/ -wholename "*month_1/**.TS.*"
+
 dry_run=false
 
 # Check for --dry-run flag
