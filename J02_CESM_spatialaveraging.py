@@ -10,13 +10,19 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(mess
 def average_spatially(
     datapath,
     verbose=False,
-    average_vars = ["CLDTOT", "FLNS", "FLNSC", "FLNT", "FLNTC", "FLNR", "FSNR", "FSNT", "FSNS", "FSNSC", "FSNTOA", "FSNTC", "FLNTCLR", "FSNTOAC", "LHFLX", "SHFLX",],
+    average_vars = ["CLDTOT", "FLNS", "FLNSC", "FLNT", "FLNTC", "FLNR", "FSNR", "FSNT", "FSNS", "FSNSC", "FSNTOA", "FSNTC", "FLNTCLR", "FSNTOAC", "LHFLX", "SHFLX", "TS"],
 ):
     ds = xr.open_dataset(datapath)
 
     varlist = [i for i in list(ds.data_vars) if i in average_vars]
 
-    lon_average = ds[varlist].mean(dim="lon")
+    try:
+        lon_average = ds[varlist].mean(dim="lon")
+    except ValueError as e:
+        logging.error(f"Error processing {datapath}: {e}")
+        logging.info(f"Available variables: {list(ds[varlist].data_vars)}")
+        return None
+
     T_average = lon_average.weighted(np.cos(np.deg2rad(ds.lat))).mean(dim="lat")
     T_average_SH = lon_average.sel(lat=slice(-90,0)).weighted(np.cos(np.deg2rad(ds.lat))).mean(dim="lat")
     T_average_NH = lon_average.sel(lat=slice(0,90)).weighted(np.cos(np.deg2rad(ds.lat))).mean(dim="lat")
@@ -42,6 +48,9 @@ def crawl_and_process(input_dir, output_dir, process_fn):
                 continue
             logging.info(f"Processing {src}")
             data = process_fn(src)
+            if data is None:
+                logging.error(f"Failed to process {src}")
+                return
             logging.info(f"Writing {dst}")
             data.to_netcdf(dst)
             # mode = "wb" if isinstance(data, (bytes, bytearray)) else "w"
