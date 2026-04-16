@@ -59,13 +59,13 @@ def crawl_and_process(input_dir, output_dir, process_fn):
 
 if __name__ == "__main__":
     curc_lme_datapath = "/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM_LME/"
-    curc_lme_outpath = "/home/josh2250/projects/PRISM/RadInt_procdata/CESM_LME/"
+    curc_lme_outpath = "/home/josh2250/projects/PRISM/data/RadInt_procdata/CESM_LME/"
 
     curc_cesm2_245_datapath = "/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_WACCM_SSP2-4.5/"
-    curc_cesm2_245_outpath = "/home/josh2250/projects/PRISM/RadInt_procdata/CESM2_WACCM_SSP2-4.5/"
+    curc_cesm2_245_outpath = "/home/josh2250/projects/PRISM/data/RadInt_procdata/CESM2_WACCM_SSP2-4.5/"
 
     curc_ariseSAI_datapath = "/home/josh2250/kaydata/jshaw/RadInt_rawdata/ARISE_SAI/"
-    curc_ariseSAI_outpath = "/home/josh2250/projects/PRISM/RadInt_procdata/ARISE_SAI/"
+    curc_ariseSAI_outpath = "/home/josh2250/projects/PRISM/data/RadInt_procdata/ARISE_SAI/"
 
     crawl_and_process(curc_lme_datapath, curc_lme_outpath, average_spatially)
     crawl_and_process(curc_cesm2_245_datapath, curc_cesm2_245_outpath, average_spatially)
