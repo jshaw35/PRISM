@@ -8,7 +8,7 @@
 # ----------------------------------------------------------
 # #SBATCH --account=ucb762_asc1                   # Ascent Allocation on Alpine
 #SBATCH --nodes=1
-#SBATCH --time=00:59:59   # Request 23 hours and 59 minutes for longer computation
+#SBATCH --time=00:59:59
 #SBATCH --partition=amilan
 #SBATCH --qos=normal
 #SBATCH --mem=8G
