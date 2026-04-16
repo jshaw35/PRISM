@@ -14,6 +14,36 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(mess
 
 # %%
 
+def shift_noleap_time_back_one_month(time_values):
+    t = np.asarray(time_values)
+    n = t.size
+
+    years = np.fromiter((v.year for v in t), dtype=np.int32, count=n)
+    months = np.fromiter((v.month for v in t), dtype=np.int16, count=n)
+    days = np.fromiter((v.day for v in t), dtype=np.int16, count=n)
+    hours = np.fromiter((v.hour for v in t), dtype=np.int16, count=n)
+    minutes = np.fromiter((v.minute for v in t), dtype=np.int16, count=n)
+    seconds = np.fromiter((v.second for v in t), dtype=np.int16, count=n)
+    microseconds = np.fromiter((v.microsecond for v in t), dtype=np.int32, count=n)
+
+    months = months - 1
+    jan_mask = months == 0
+    months[jan_mask] = 12
+    years[jan_mask] = years[jan_mask] - 1
+
+    days_in_month = np.array([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31], dtype=np.int16)
+    days = np.minimum(days, days_in_month[months - 1])
+
+    dt_type = type(t[0])
+    return np.array(
+        [
+            dt_type(int(y), int(m), int(d), int(h), int(mi), int(s), int(us))
+            for y, m, d, h, mi, s, us in zip(years, months, days, hours, minutes, seconds, microseconds)
+        ],
+        dtype=object,
+    )
+
+
 def compute_IEEI(
     olr_ds,
     asr_ds,
@@ -110,6 +140,10 @@ def crawl_and_list(input_dir, file_string):
     return file_list
 
 
+def crawl_and_list_glob(input_dir, file_string):
+    filelist = list(Path(input_dir).glob(f"**/{file_string}"))
+    return [str(file) for file in filelist]
+
 # %%
 
 if __name__ == "__main__":
@@ -117,16 +151,49 @@ if __name__ == "__main__":
     curc_cesm2_245_outpath = "data/RadInt_procdata/CESM2_WACCM_SSP2-4.5/"
     curc_ariseSAI_outpath = "data/RadInt_procdata/ARISE_SAI/"
 
-    asr_var = "FSNTOA"
-    olr_var = "FLNT"
+    lme_case_str = "BLMTRC5CN.f19_g16.003"
+    cesm2_cesm2_245_case_str = "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.001"
+    ariseSAI_case_str = "1p5K-SAI.001"
 
-    for datapath in [curc_lme_outpath, curc_cesm2_245_outpath, curc_ariseSAI_outpath]:
-        asr_files = crawl_and_list(datapath, f".{asr_var}.")
-        olr_files = crawl_and_list(datapath, f".{olr_var}.")
-        #
+    case_labels = ["CESM-LME", "CESM2-SSP2-4.5", "ARISE-SAI"]
+
+    asr_var = "FSNT" #"FSNTOA"
+    olr_var = "FLNT" #"FLNT"
+    ts_var = "TS"
+
+    data_dict = {}
+    for datapath, case_str, case_label in [(curc_lme_outpath, lme_case_str, case_labels[0]), (curc_cesm2_245_outpath, cesm2_cesm2_245_case_str, case_labels[1]), (curc_ariseSAI_outpath, ariseSAI_case_str, case_labels[2])]:
+
+        asr_files = crawl_and_list_glob(datapath, f"**/*{case_str}*.{asr_var}.*nc")
+        olr_files = crawl_and_list_glob(datapath, f"**/*{case_str}*.{olr_var}.*nc")
+        ts_files = crawl_and_list_glob(datapath, f"**/*{case_str}*.{ts_var}.*nc")
+
         asr_ds = xr.open_mfdataset(asr_files)
         olr_ds = xr.open_mfdataset(olr_files)
-        #
+        ts_ds = xr.open_mfdataset(ts_files)
+
+        data_dict[case_label] = {
+            "asr_ds": asr_ds,
+            "olr_ds": olr_ds,
+            "ts_ds": ts_ds,
+        }
+
+    for case_label in case_labels:
+        logging.info(f"Plotting case: {case_label}")
+        olr_ds = data_dict[case_label]["olr_ds"]
+        asr_ds = data_dict[case_label]["asr_ds"]
+        ts_ds = data_dict[case_label]["ts_ds"]
+
+        # Handle the CESM time coordinate issue and challenges with cftime.DatetimeNoLeap
+        asr_ds = asr_ds.assign_coords(
+            time=shift_noleap_time_back_one_month(asr_ds["time"].values)
+        )
+        olr_ds = olr_ds.assign_coords(
+            time=shift_noleap_time_back_one_month(olr_ds["time"].values)
+        )
+        ts_ds = ts_ds.assign_coords(
+            time=shift_noleap_time_back_one_month(ts_ds["time"].values)
+        )
 
         fig, axs = plt.subplots(1, 3, figsize=(12, 4))
         plot_radiative_imbalance(
@@ -217,8 +284,8 @@ axs[2].set_ylabel("")
 # %%
 datapath = curc_cesm2_245_outpath
 
-asr_files = crawl_and_list(datapath, f".{asr_var}.")
-olr_files = crawl_and_list(datapath, f".{olr_var}.")
+asr_files = crawl_and_list_glob(datapath, f"**/*.{asr_var}.*")
+olr_files = crawl_and_list_glob(datapath, f"**/*.{olr_var}.*")
 #
 asr_ds = xr.open_mfdataset(asr_files)
 olr_ds = xr.open_mfdataset(olr_files)
