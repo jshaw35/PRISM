@@ -50,12 +50,10 @@ def crawl_and_process(input_dir, output_dir, process_fn):
             data = process_fn(src)
             if data is None:
                 logging.error(f"Failed to process {src}")
-                return
+                continue
             logging.info(f"Writing {dst}")
             data.to_netcdf(dst)
-            # mode = "wb" if isinstance(data, (bytes, bytearray)) else "w"
-            # with open(dst, mode) as f:
-                # f.write(data)
+
 
 if __name__ == "__main__":
     curc_lme_datapath = "/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM_LME/"
