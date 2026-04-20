@@ -147,42 +147,260 @@ def crawl_and_list_glob(input_dir, file_string):
 # %%
 
 if __name__ == "__main__":
-    curc_lme_outpath = "data/RadInt_procdata/CESM_LME/"
-    curc_cesm2_245_outpath = "data/RadInt_procdata/CESM2_WACCM_SSP2-4.5/"
-    curc_ariseSAI_outpath = "data/RadInt_procdata/ARISE_SAI/"
-
-    lme_case_str = "BLMTRC5CN.f19_g16.003"
-    cesm2_cesm2_245_case_str = "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.001"
-    ariseSAI_case_str = "1p5K-SAI.001"
-
-    case_labels = ["CESM-LME", "CESM2-SSP2-4.5", "ARISE-SAI"]
-
-    asr_var = "FSNT" #"FSNTOA"
-    olr_var = "FLNT" #"FLNT"
+    CASE_CONFIGS = {
+        "CESM-LME": {
+            "path": "data/RadInt_procdata/CESM_LME/",
+            "case_str": "BLMTRC5CN.f19_g16.003",
+            "append_case": None,
+            "ufunc": None,
+        },
+        "CESM2-SSP2-4.5": {
+            "path": "data/RadInt_procdata/CESM2_WACCM_SSP2-4.5/",
+            "case_str": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.001",
+            "append_case": None,
+            "ufunc": lambda ds: ds.sel(time=slice(None, "2084-12-31")),
+        },
+        "ARISE-SAI": {
+            "path": "data/RadInt_procdata/ARISE_SAI/",
+            "case_str": "1p5K-SAI.001",
+            "append_case": "CESM2-SSP2-4.5",
+            "ufunc": None,
+        },
+        # Add new cases here when ready
+        # "CESM2-LME": {
+        #     "path": "data/RadInt_procdata/CESM2_LME/",
+        #     "case_str": None,
+        # },
+        # "CESM2-LE": {
+        #     "path": "data/RadInt_procdata/CESM2_LE/",
+        #     "case_str": None,
+        # },
+    }
+    asr_var = "FSNT"
+    olr_var = "FLNT"
     ts_var = "TS"
 
+    load_var_list = [asr_var, olr_var, ts_var]
     data_dict = {}
-    for datapath, case_str, case_label in [(curc_lme_outpath, lme_case_str, case_labels[0]), (curc_cesm2_245_outpath, cesm2_cesm2_245_case_str, case_labels[1]), (curc_ariseSAI_outpath, ariseSAI_case_str, case_labels[2])]:
 
-        asr_files = crawl_and_list_glob(datapath, f"**/*{case_str}*.{asr_var}.*nc")
-        olr_files = crawl_and_list_glob(datapath, f"**/*{case_str}*.{olr_var}.*nc")
-        ts_files = crawl_and_list_glob(datapath, f"**/*{case_str}*.{ts_var}.*nc")
+    for case_label in CASE_CONFIGS.keys():
+        datapath = CASE_CONFIGS[case_label]["path"]
+        case_str = CASE_CONFIGS[case_label]["case_str"]
 
-        asr_ds = xr.open_mfdataset(asr_files)
-        olr_ds = xr.open_mfdataset(olr_files)
-        ts_ds = xr.open_mfdataset(ts_files)
+        all_files = []
+        for var in load_var_list:
+            var_files = crawl_and_list_glob(datapath, f"**/*{case_str}*.{var}.*nc")
+            all_files.extend(var_files)
+        if len(all_files) == 0:
+            logging.warning(f"No files found for case {case_label} with case string {case_str} in path {datapath}")
+            continue
+        
+        all_ds = xr.open_mfdataset(all_files)
 
-        data_dict[case_label] = {
-            "asr_ds": asr_ds,
-            "olr_ds": olr_ds,
-            "ts_ds": ts_ds,
-        }
+        # Handle the CESM time coordinate issue and challenges with cftime.DatetimeNoLeap
+        if all_ds["time"][0]["time.month"] == 2:
+            all_ds = all_ds.assign_coords(
+                time=shift_noleap_time_back_one_month(all_ds["time"].values)
+            )
 
+        # If there is an append case specified, append the data from that case to the current dataset along the time dimension
+        # e.g. for ARISE-SAI, we want to append the CESM2-SSP2-4.5 data it is branched from. We will assume that the append case has already been loaded and is available in data_dict.
+        if CASE_CONFIGS[case_label]["append_case"] is not None:
+            append_case_label = CASE_CONFIGS[case_label]["append_case"]
+            if append_case_label not in data_dict:
+                logging.warning(f"Append case {append_case_label} not found in data_dict for case {case_label}. Skipping append.")
+            else:
+                append_ds = data_dict[append_case_label].sel(time=slice(None, str(all_ds["time.year"][0].values - 1)))
+                all_ds = xr.concat([append_ds, all_ds], dim="time")
+
+        if CASE_CONFIGS[case_label]["ufunc"] is not None:
+            all_ds = CASE_CONFIGS[case_label]["ufunc"](all_ds)
+
+        data_dict[case_label] = all_ds
+
+    # %%
+    PLOT_CONFIGS = {
+        "CESM-LME": {
+            "ylims": (230, 237),
+            "xlims": (230, 237),
+            "cbar_ticks": np.arange(850, 2005, 100),
+            "cbar_ylabel": None,
+        },
+        "CESM2-SSP2-4.5": {
+            "ylims": (236, 245),
+            "xlims": (236, 245),
+            "cbar_ticks": np.arange(2015, 2086, 10),
+            "cbar_ylabel": None,
+        },
+        "ARISE-SAI": {
+            "ylims": (236, 245),
+            "xlims": (236, 245),
+            "cbar_ticks": np.arange(2015, 2086, 10),
+            "cbar_ylabel": None,
+        },
+    }
+    # Plot the CESM LME, SSP2-4.5, and ARISE-SAI data annually and decadally for the global mean in a 1x3 subplot grid
+    fig,axs = plt.subplots(1,3, figsize=(16,4.5))
+    fig.subplots_adjust(wspace=0.45)
+    caxes = [fig.add_axes([0.33, 0.15, 0.01, 0.7]), fig.add_axes([0.62, 0.15, 0.01, 0.7]), fig.add_axes([0.905, 0.15, 0.01, 0.7])] # create separate colorbar axes for each subplot
+    
+    for ax, cax, case_label in zip(axs, caxes, ["CESM-LME", "CESM2-SSP2-4.5", "ARISE-SAI"]):
+        logging.info(f"Plotting case: {case_label}")
+        # cax = ax.inset_axes([1.02, 0.15, 0.02, 0.7])
+        olr_ds = data_dict[case_label][olr_var]
+        asr_ds = data_dict[case_label][asr_var]
+
+        # Compute annual means for ASR and OLR
+        asr_annual = asr_ds.sel(spatial="G").groupby("time.year").mean()
+        olr_annual = olr_ds.sel(spatial="G").groupby("time.year").mean()
+
+        # Compute decadal means for ASR and OLR and set time coordinate to the first year in the decade
+        asr_decadal = asr_ds.sel(spatial="G").resample(time='10YE').mean().groupby("time.year").mean()
+        olr_decadal = olr_ds.sel(spatial="G").resample(time='10YE').mean().groupby("time.year").mean()
+
+        plot_radiative_imbalance_annual(
+            olr_annual,
+            asr_annual,
+            ax=ax,
+            cax=cax,
+            plot_kwargs={"s": 5, "alpha": 0.5},
+            connected=False,
+            line11=False,
+        )
+        plot_radiative_imbalance_annual(
+            olr_decadal,
+            asr_decadal,
+            ax=ax,
+            cax=cax,
+            plot_kwargs={"s": 50, "facecolors": "none", "edgecolors": "black"},
+            connected=False,
+            line11=False,
+        )
+        ax.set_title(case_label)
+    
+    # Apply the plot config settings for each subplot
+    for ax, cax, case_label in zip(axs, caxes, ["CESM-LME", "CESM2-SSP2-4.5", "ARISE-SAI"]):
+        ax.set_xlim(PLOT_CONFIGS[case_label]["xlims"])
+        ax.set_ylim(PLOT_CONFIGS[case_label]["ylims"])
+        cax.set_yticks(PLOT_CONFIGS[case_label]["cbar_ticks"])
+        cax.set_ylabel(PLOT_CONFIGS[case_label]["cbar_ylabel"])
+        
+        # Add 1-1 lines over the new domain
+        min_val = min(PLOT_CONFIGS[case_label]["xlims"][0], PLOT_CONFIGS[case_label]["ylims"][0])
+        max_val = min(PLOT_CONFIGS[case_label]["xlims"][1], PLOT_CONFIGS[case_label]["ylims"][1])
+        # max_val = max(olr_da.max(), asr_da.max())
+        ax.plot(
+            [min_val, max_val],
+            [min_val, max_val],
+            color="grey",
+            linestyle="--",
+            zorder=0,
+        )
+
+    # %%
+    # Plot the LME data annually and decadally for the global mean
+    asr_data = data_dict['CESM-LME'][asr_var].sel(spatial="G")
+    olr_data = data_dict['CESM-LME'][olr_var].sel(spatial="G")
+
+    # Compute annual means for ASR and OLR
+    asr_annual = asr_data.groupby("time.year").mean()
+    olr_annual = olr_data.groupby("time.year").mean()
+
+    # Compute decadal means for ASR and OLR and set time coordinate to the first year in the decade
+    asr_decadal = asr_data.resample(time='10YE').mean().groupby("time.year").mean()
+    olr_decadal = olr_data.resample(time='10YE').mean().groupby("time.year").mean()
+    fig,ax = plt.subplots(1,1,figsize=(7,5))
+    cax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+    plot_radiative_imbalance_annual(
+        olr_annual,
+        asr_annual,
+        ax=ax,
+        cax=cax,
+        plot_kwargs={"s": 5, "alpha": 0.5},
+        connected=False,
+        line11=False,
+    )
+    plot_radiative_imbalance_annual(
+        olr_decadal,
+        asr_decadal,
+        ax=ax,
+        cax=cax,
+        plot_kwargs={"s": 50, "facecolors": "none", "edgecolors": "black"},
+        connected=False,
+        line11=False,
+    )
+    ax.set_xlim(226, None)
+
+    # %%
+    # Plot the SSP2-4.5 data annually and decadally for the global mean
+    asr_data = data_dict['CESM2-SSP2-4.5'][asr_var].sel(spatial="G")
+    olr_data = data_dict['CESM2-SSP2-4.5'][olr_var].sel(spatial="G")
+
+    # Compute annual means for ASR and OLR
+    asr_annual = asr_data.groupby("time.year").mean()
+    olr_annual = olr_data.groupby("time.year").mean()
+
+    # Compute decadal means for ASR and OLR and set time coordinate to the first year in the decade
+    asr_decadal = asr_data.resample(time='10YE').mean().groupby("time.year").mean()
+    olr_decadal = olr_data.resample(time='10YE').mean().groupby("time.year").mean()
+    fig,ax = plt.subplots(1,1,figsize=(7,5))
+    cax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+    plot_radiative_imbalance_annual(
+        olr_annual,
+        asr_annual,
+        ax=ax,
+        cax=cax,
+        plot_kwargs={"s": 5, "alpha": 0.5},
+        connected=False,
+    )
+    plot_radiative_imbalance_annual(
+        olr_decadal,
+        asr_decadal,
+        ax=ax,
+        cax=cax,
+        plot_kwargs={"s": 50, "facecolors": "none", "edgecolors": "black"},
+        connected=False,
+    )
+
+    # %%
+    # Plot the ARISE-SAI data annually and decadally for the global mean
+    asr_data = data_dict["ARISE-SAI"][asr_var].sel(spatial="G")
+    olr_data = data_dict["ARISE-SAI"][olr_var].sel(spatial="G")
+
+    # Compute annual means for ASR and OLR
+    asr_annual = asr_data.groupby("time.year").mean()
+    olr_annual = olr_data.groupby("time.year").mean()
+
+    # Compute decadal means for ASR and OLR and set time coordinate to the first year in the decade
+    asr_decadal = asr_data.resample(time='10YE').mean().groupby("time.year").mean()
+    olr_decadal = olr_data.resample(time='10YE').mean().groupby("time.year").mean()
+    fig,ax = plt.subplots(1,1,figsize=(7,5))
+    cax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+    plot_radiative_imbalance_annual(
+        olr_annual,
+        asr_annual,
+        ax=ax,
+        cax=cax,
+        plot_kwargs={"s": 5, "alpha": 0.5},
+        connected=False,
+    )
+    plot_radiative_imbalance_annual(
+        olr_decadal,
+        asr_decadal,
+        ax=ax,
+        cax=cax,
+        plot_kwargs={"s": 50, "facecolors": "none", "edgecolors": "black"},
+        connected=False,
+    )
+    # ax.set_xlim(226, None)
+
+
+    # %%
     for case_label in case_labels:
         logging.info(f"Plotting case: {case_label}")
-        olr_ds = data_dict[case_label]["olr_ds"]
-        asr_ds = data_dict[case_label]["asr_ds"]
-        ts_ds = data_dict[case_label]["ts_ds"]
+        olr_ds = data_dict[case_label][olr_var]
+        asr_ds = data_dict[case_label][asr_var]
+        ts_ds = data_dict[case_label][ts_var]
 
         # Handle the CESM time coordinate issue and challenges with cftime.DatetimeNoLeap
         asr_ds = asr_ds.assign_coords(
@@ -197,8 +415,8 @@ if __name__ == "__main__":
 
         fig, axs = plt.subplots(1, 3, figsize=(12, 4))
         plot_radiative_imbalance(
-            olr_ds[olr_var].sel(spatial="G").compute(),
-            asr_ds[asr_var].sel(spatial="G").compute(),
+            olr_ds.sel(spatial="G").compute(),
+            asr_ds.sel(spatial="G").compute(),
             ax=axs[0],
         )
         plot_radiative_imbalance(

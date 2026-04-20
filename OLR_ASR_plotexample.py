@@ -176,15 +176,16 @@ def plot_radiative_imbalance_annual(
             )
 
     # Plot the 1:1 line
-    min_val = min(olr_da.min(), asr_da.min())
-    max_val = max(olr_da.max(), asr_da.max())
-    ax.plot(
-        [min_val, max_val],
-        [min_val, max_val],
-        color="grey",
-        linestyle="--",
-        zorder=0,
-    )
+    if line11:
+        min_val = min(olr_da.min(), asr_da.min())
+        max_val = max(olr_da.max(), asr_da.max())
+        ax.plot(
+            [min_val, max_val],
+            [min_val, max_val],
+            color="grey",
+            linestyle="--",
+            zorder=0,
+        )
     ax.set_xlabel("OLR [Wm$^{-2}$]", fontsize=fontsize)
     ax.set_ylabel("ASR [Wm$^{-2}$]", fontsize=fontsize)
     if not line11:
