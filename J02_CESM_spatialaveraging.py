@@ -71,9 +71,12 @@ if __name__ == "__main__":
     curc_cesm2_le_datapath = "/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_LE/"
     curc_cesm2_le_outpath = "/home/josh2250/projects/PRISM/data/RadInt_procdata/CESM2_LE/"
 
+    curc_cesm2_mcb_datapath = "/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_WACCM_SSP2-4.5_MCB/"
+    curc_cesm2_mcb_outpath = "/home/josh2250/projects/PRISM/data/RadInt_procdata/CESM2_WACCM_SSP2-4.5_MCB/"
+
     crawl_and_process(curc_lme_datapath, curc_lme_outpath, average_spatially)
     crawl_and_process(curc_cesm2_245_datapath, curc_cesm2_245_outpath, average_spatially)
     crawl_and_process(curc_ariseSAI_datapath, curc_ariseSAI_outpath, average_spatially)
     crawl_and_process(curc_cesm2_lme_datapath, curc_cesm2_lme_outpath, average_spatially)
     crawl_and_process(curc_cesm2_le_datapath, curc_cesm2_le_outpath, average_spatially)
-
+    crawl_and_process(curc_cesm2_mcb_datapath, curc_cesm2_mcb_outpath, average_spatially)
