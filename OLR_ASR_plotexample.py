@@ -20,6 +20,7 @@ def plot_radiative_imbalance(
     monthly=True,
     connected=True,
     line11=True,
+    norm=None,
 ):
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 5))
@@ -49,6 +50,7 @@ def plot_radiative_imbalance(
                 c=olr_dai['time.year']+0.083*olr_dai['time.month'], #fractional year coordinate
                 marker=marker,
                 cmap=cmap,
+                norm=norm,
                 zorder=10,
                 label=sea,
                 **plot_kwargs,
@@ -61,6 +63,7 @@ def plot_radiative_imbalance(
             c=olr_da['time.year']+0.083*olr_da['time.month'], #fractional year coordinate
             marker=marker,
             cmap=cmap,
+            norm=norm,
             zorder=10,
             **plot_kwargs,
         )
@@ -70,11 +73,12 @@ def plot_radiative_imbalance(
     #     start=pd.to_datetime(olr_da["time"].min().data),
     #     end=pd.to_datetime(olr_da["time"].max().data), 
     #     periods=min(olr_da.sizes['time'],255)) 
-    bounds = np.arange(
-        olr_da['time.year'].min(),
-        olr_da['time.year'].max(),
-        max(1,(olr_da['time.year'].max()-olr_da['time.year'].min())/255))
-    norm = mpl.colors.BoundaryNorm(np.array(bounds), cmap.N, extend='both')
+    if norm is None:
+        bounds = np.arange(
+            olr_da['time.year'].min(),
+            olr_da['time.year'].max(),
+            max(1,(olr_da['time.year'].max()-olr_da['time.year'].min())/255))
+        norm = mpl.colors.BoundaryNorm(np.array(bounds), cmap.N, extend='both')
 
     if add_colorbar:
         if cax is None:
@@ -125,6 +129,7 @@ def plot_radiative_imbalance_annual(
     cax=None,
     connected=True,
     line11=True,
+    norm=None,
 ):
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 5))
@@ -149,17 +154,19 @@ def plot_radiative_imbalance_annual(
         c=olr_da['year'],
         marker='o',
         cmap=cmap,
+        norm=norm,
         zorder=10,
         **plot_kwargs,
     )
 
     # Add a colorbar with discrete intervals and extend='both' keyword
-    bounds = np.arange(
-        olr_da['year'].min(),
-        olr_da['year'].max(),
-        max(1, (olr_da['year'].max() - olr_da['year'].min()) / 255),
-    )
-    norm = mpl.colors.BoundaryNorm(np.array(bounds), cmap.N, extend='both')
+    if norm is None:
+        bounds = np.arange(
+            olr_da['year'].min(),
+            olr_da['year'].max(),
+            max(1, (olr_da['year'].max() - olr_da['year'].min()) / 255),
+        )
+        norm = mpl.colors.BoundaryNorm(np.array(bounds), cmap.N, extend='both')
 
     if add_colorbar:
         if cax is None:
