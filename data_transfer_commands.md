@@ -50,9 +50,19 @@ find /gdex/data/d314006 -wholename "*month_1/**.TS.*"
 ./job_scripts/gdex_file_transfer.sh "*month_1/**.TS.*" /gdex/data/d314006 josh2250@login.rc.colorado.edu:/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_WACCM_SSP2-4.5_MCB/d314006/
 
 __CESM2_LME examples:__
+*Initially just the past1000 run*
 find /gdex/data/d651078/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002/ -wholename "*month_1/**.TS.*"
 
 ./job_scripts/gdex_file_transfer.sh "*month_1/**.TS.*" /gdex/data/d651078/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002 josh2250@login.rc.colorado.edu:/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_LME/d651078/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002/
+
+*Now including the control run:*
+find /gdex/data/d651078/ -wholename "*month_1/**.TS.*"
+
+./job_scripts/gdex_file_transfer.sh "*month_1/**.TS.*" /gdex/data/d651078 josh2250@login.rc.colorado.edu:/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_LME/d651078/
+
+find /gdex/data/d651078/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008/ -wholename "*month_1/**.TS.*"
+
+./job_scripts/gdex_file_transfer.sh "*month_1/**.TS.*" /gdex/data/d651078/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008 josh2250@login.rc.colorado.edu:/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_LME/d651078/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008/
 
 __CESM2-LE examples:__
 *I will try to get a few ensemble members from both the original and SMBB simulations before branching to SSP.*
