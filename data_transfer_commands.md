@@ -4,7 +4,7 @@ List of variable strings used in the data transfer commands.
 .CLDTOT.
 .FLN*.
 .FSN*.
-.FLUT.
+.FLUT*.
 
 If I open a connection with -M it should allow me to reuse the SSH connection for multiple file transfers, so I can run multiple commands in a row without having to re-enter my password each time. For example:
 casp
@@ -84,3 +84,11 @@ BHISTcmip6.f09_g17.LE2-1301
 
 *Just the BHISTcmip6 members with member index 00? branched from 1301:*
 ./job_scripts/gdex_file_transfer.sh "*month_1/**BHISTcmip6.f09_g17.LE2-1301*00?.cam.h0.TS.*" /gdex/data/d651056/CESM2-LE josh2250@login.rc.colorado.edu:/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_LE/d651056/CESM2-LE/
+
+__CESM2 1850control examples:__
+
+find /glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/b.e21.B1850.f09_g17.CMIP6-piControl.001 -wholename "*month_1/**b.e21.B1850.f09_g17.CMIP6-piControl.001.cam.h0.TS.*"
+
+./job_scripts/gdex_file_transfer.sh "*month_1/**b.e21.B1850.f09_g17.CMIP6-piControl.001.cam.h0.TS.*" /glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/b.e21.B1850.f09_g17.CMIP6-piControl.001 josh2250@login.rc.colorado.edu:/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_1850control/b.e21.B1850.f09_g17.CMIP6-piControl.001/
+
+
