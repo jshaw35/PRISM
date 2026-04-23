@@ -27,16 +27,24 @@ def compute_thermoprecip(
     Args:
         ds (_type_): _description_
     """
-    L = 2.45e6  # J/kg, latent heat of vaporization or 2.257e3 J/kg or 2.5e6 J/kg
+    L = 2.5e6  # J/kg, latent heat of vaporization or 2.257e3 J/kg or 2.45e6 J/kg
+    # 2.5e6 per this lecture slide: https://ethz.ch/content/dam/ethz/special-interest/usys/iac/iac-dam/documents/edu/courses/climatological_and_hydrological_field_work/radiation_2025.pdf
     vars = ["FLNT", "FSNT", "FLNS", "FSNS", "SHFLX"]
     assert set(vars).issubset(set(ds.data_vars)), "Not all variables in varlist are in the dataset."
 
-    R_TOA = ds["FLNT"] - ds["FSNT"]
-    R_SFC = ds["FLNS"] - ds["FSNS"]
+    R_LW = ds["FLNT"] - ds["FLNS"] # Positive upwards convention for LW
+    R_SW = -1 * (ds["FSNT"] - ds["FSNS"]) # The convention is positive downwards for SW, so invert
+    R_ATM = R_LW + R_SW # Net radiation emitted/lost by the atmosphere
     SHFLX = ds["SHFLX"]
-
     # Compute in units of kg m^-2 s^-1
-    P = (R_TOA - R_SFC - SHFLX) / L 
+    P = (R_ATM - SHFLX) / L
+
+    # R_TOA = ds["FLNT"] - ds["FSNT"] # Positive upwards convention for LW
+    # R_SFC = (ds["FLNS"] - ds["FSNS"]) # The convention is positive downwards for SW, so invert
+    # SHFLX = ds["SHFLX"]
+    # # Compute in units of kg m^-2 s^-1
+    # P = (R_TOA - R_SFC - SHFLX) / L
+
     # Convert to mm/day: 1000 mm / m, 86400 s / day, 1000 kg / m^3 for water density (last two cancel out)
     P = P * 86400
     P.attrs["long_name"] = "Thermodynamically-driven precipitation"
@@ -70,7 +78,8 @@ def compute_background_state(
     save_path,
     case_name: str,
     pattern: list[str],
-    mask= list[int] | None,
+    mask=list[int] | None,
+    tslice=None,
 ):
     label = pattern[0]
     glob_str = pattern[1]
@@ -83,6 +92,7 @@ def compute_background_state(
     mean_var_list = []
 
     # Compute the precipitation proxy variable and add it to the list of variables to average
+    logging.info("Processing precipitation proxy variable")
     precip_files = {}
     precip_vars = ["FLNT", "FSNT", "FLNS", "FSNS", "SHFLX"]
     for _var in precip_vars:
@@ -90,54 +100,82 @@ def compute_background_state(
         varfiles.sort()  # Ensure files are in a consistent order
         precip_files[_var] = varfiles
     for i in range(len(precip_files["FLNT"])):
+        print(i)
         trying_files = [precip_files[_var][i] for _var in precip_vars]
-        ds_merged = xr.open_mfdataset(trying_files, combine="by_coords")
-        if not set(precip_vars).issubset(set(ds_merged.data_vars)):
+        ds_merged = xr.open_mfdataset(trying_files, combine="by_coords")[precip_vars]
+        # Get the time length and add it to weight the average by the number of time steps in each file later
+        time_len = ds_merged.sizes["time"]
+        if tslice is not None:
+            ds_merged = ds_merged.sel(time=tslice)
+        ds_tmean = ds_merged.mean(dim="time")
+        if not set(precip_vars).issubset(set(ds_tmean.data_vars)):
             logging.warning(f"Not all variables in precip_vars are in the merged dataset for index {i}. Skipping this index.")
             continue
 
-        precip_ds = compute_thermoprecip(ds_merged)
+        precip_ds = compute_thermoprecip(ds_tmean)
         precip_ds = precip_ds.assign_coords(index_t=i).expand_dims("index_t")
+        precip_ds = precip_ds.assign_coords(time_len=("index_t", [time_len]))
         mean_var_list.append(precip_ds)
 
+    precip_ds_all = xr.concat(mean_var_list, dim="index_t")
+    precip_ds_all = precip_ds_all.weighted(precip_ds_all["time_len"]).mean("index_t")
+
+    mean_var_list = []
     for _var in varlist:
         subset_filepaths = [fp for fp in filepaths if f".{_var}." in fp.name]
+        subset_filepaths.sort()  # Ensure files are in a consistent order
         if not subset_filepaths:
             logging.warning(f"No files found for variable {_var} in case {case_name} with pattern {glob_str}")
             continue
+        logging.info(f"Processing variable: {_var} with {len(subset_filepaths)} files for case {case_name}")
         tmean_ds_list = []
         for i,fp in enumerate(subset_filepaths):
-            logging.info(f"Processing file: {fp}")
-            ds = xr.open_dataset(fp)
+            ds = xr.open_dataset(fp)[_var]
             # Get the time length and add it to weight the average by the number of time steps in each file later
-            time_len = ds.dims.get("time")
+            time_len = ds.sizes["time"]
             ds_tmean = ds.mean(dim="time")
             ds_tmean = ds_tmean.assign_coords(index_t=i).expand_dims("index_t")
             # Add a variable indexed by the new index_t dimension that contains the time length of the original dataset for weighting later
-            ds_tmean = ds_tmean.assign(time_len=("index_t", [time_len]))
+            ds_tmean = ds_tmean.assign_coords(time_len=("index_t", [time_len]))
             tmean_ds_list.append(ds_tmean)
         # Compute the weighted average of the time means from each file
         tmean_ds = xr.concat(tmean_ds_list, dim="index_t")
         weighted_tmean = tmean_ds.weighted(tmean_ds["time_len"]).mean(dim="index_t")
         mean_var_list.append(weighted_tmean)
+        break
+    if not mean_var_list:
+        logging.error(f"No variables were processed for case {case_name} with pattern {glob_str}. No output will be saved.")
+        return
     mean_ds = xr.merge(mean_var_list)
-    mean_ds.to_netcdf(save_path)
+    final_ds = xr.merge([mean_ds, precip_ds_all])
+    # return final_ds
+    final_ds.to_netcdf(save_path)
 
 
 # %%
 if __name__ == "__main__":
-    rawdata_root = Path("/home/josh2250/kaydata/jshaw/RadInt_rawdata/")
-    save_path = Path("/home/josh2250/projects/PRISM/data/control_baselines/")
+    # rawdata_root = Path("/home/josh2250/kaydata/jshaw/RadInt_rawdata/")
+    # save_path = Path("/home/josh2250/projects/PRISM/data/control_baselines/")
+
+    # case_dict = {
+    #     "CESM2_LME_control": ["b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008","CESM2_LME/d651078/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008/atm/proc/tseries/month_1/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008.cam.h0.*"],
+    #     # "CESM2_LME": ["b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002", "CESM2_LME/d651078/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002/atm/proc/tseries/month_1/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002.cam.h0.*"],
+    #     "CESM2_1850control": ["b.e21.B1850.f09_g17.CMIP6-piControl.001", "CESM2_1850control/b.e21.B1850.f09_g17.CMIP6-piControl.001/atm/proc/tseries/month_1/b.e21.B1850.f09_g17.CMIP6-piControl.001.cam.h0.*"],
+    # }
+
+    rawdata_root = Path("/gdex/data/")
+    save_path = Path("/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/data/control_baselines/")
 
     case_dict = {
-        "CESM2_LME_control": ["b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008","CESM2_LME/d651078/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008/atm/proc/tseries/month_1/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008.cam.h0.*"],
+        "CESM2_LME_control": ["b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008","d651078/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008/atm/proc/tseries/month_1/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008.cam.h0.*"],
         # "CESM2_LME": ["b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002", "CESM2_LME/d651078/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002/atm/proc/tseries/month_1/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002.cam.h0.*"],
-        "CESM2_1850control": ["b.e21.B1850.f09_g17.CMIP6-piControl.001", "CESM2_1850control/b.e21.B1850.f09_g17.CMIP6-piControl.001/atm/proc/tseries/month_1/b.e21.B1850.f09_g17.CMIP6-piControl.001.cam.h0.*"],
+        "CESM2_1850control": ["b.e21.B1850.f09_g17.CMIP6-piControl.001", "b.e21.B1850.f09_g17.CMIP6-piControl.001/atm/proc/tseries/month_1/b.e21.B1850.f09_g17.CMIP6-piControl.001.cam.h0.*"],
     }
 
     for case, pattern in case_dict.items():
         logging.info("Processing: %s, pattern: %s" % (case, pattern[0]))
-        compute_background_state(
+        # ds_merged, precip_ds = compute_background_state(
+        test_out = compute_background_state(
             rawdata_root,
             save_path,
             case,
@@ -145,6 +183,23 @@ if __name__ == "__main__":
         )
         break
 
+    # %%
+    import matplotlib.pyplot as plt
+    precip_avg = precip_ds.mean(dim="time")
+    precip_avg.plot()
+    ds_avg = ds_merged.mean(dim="time")
+    # %%
+    fig,axs = plt.subplots(2,3, figsize=(15,6))
+    fig.subplots_adjust(hspace=0.4)
+    ds_avg["FLNT"].plot(ax=axs[0,0])
+    ds_avg["FLNS"].plot(ax=axs[0,1])
+    (ds_avg["FLNT"] - ds_avg["FLNS"]).plot(ax=axs[0,2])
+    ds_avg["FSNT"].plot(ax=axs[1,0])
+    ds_avg["FSNS"].plot(ax=axs[1,1])
+    (ds_avg["FSNT"] - ds_avg["FSNS"]).plot(ax=axs[1,2])
+    # %%
+    # ds_avg["SHFLX"].plot()
+    # %%
     # cesm2_lme_control_str = "CESM2_LME/d651078/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008/atm/proc/tseries/month_1/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008.cam.h0.*"
     # cesm2_lme_str = "CESM2_LME/d651078/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002/atm/proc/tseries/month_1/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002.cam.h0.*"
 

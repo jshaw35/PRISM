@@ -386,7 +386,7 @@ if __name__ == "__main__":
         data_dict[case_label] = all_ds
 
     # %%
-    PLOT_CONFIGS = {
+    PLOT_CONFIGS1 = {
         "CESM-LME": {
             "ax1_lims": (228, 237),
             "ax2_lims": (-3, 6),
@@ -414,6 +414,7 @@ if __name__ == "__main__":
     # PLOT 1: Historical scenarios (CESM-LME, CESM2-LME)
     # Integration starts from year 850
     logging.info("Creating Plot 1: Historical scenarios (CESM-LME, CESM2-LME)")
+    PLOT_CONFIGS = PLOT_CONFIGS1
     
     fig, axes = plt.subplots(2, 2, figsize=(15, 10))
     fig.subplots_adjust(wspace=0.40)
@@ -489,11 +490,11 @@ if __name__ == "__main__":
         # Add a horizontal line at y=0 for the EEI subplot
         ax2.axhline(0, color='grey', linestyle='--', linewidth=1)
 
-    # fig.savefig("figures/figure2_toprow.png", dpi=300, bbox_inches='tight')
-    # logging.info("Saved figure2_toprow.png")
-    # plt.close(fig)
+    fig.savefig("figures/figure2b_toprow.png", dpi=300, bbox_inches='tight')
+    logging.info("Saved figure2b_toprow.png")
+    plt.close(fig)
     # %%
-    PLOT_CONFIGS = {
+    PLOT_CONFIGS2 = {
         "CESM2-SSP2-4.5": {
             "ax1_lims": (237, 244),
             "ax2_lims": (-4, 3),
@@ -530,7 +531,8 @@ if __name__ == "__main__":
     # PLOT 2: Future scenarios (CESM2-SSP2-4.5, ARISE-SAI, CESM2-SSP2-4.5_MCB)
     # Integration starts from year 1850
     logging.info("Creating Plot 2: Future scenarios (CESM2-SSP2-4.5, ARISE-SAI, CESM2-SSP2-4.5_MCB)")
-    
+    PLOT_CONFIGS = PLOT_CONFIGS2
+
     fig, axes = plt.subplots(2, 3, figsize=(16, 10))
     fig.subplots_adjust(wspace=0.35)
     
@@ -603,7 +605,7 @@ if __name__ == "__main__":
         # Add a horizontal line at y=0 for the EEI subplot
         ax2.axhline(0, color='grey', linestyle='--', linewidth=1)
 
-    # fig.savefig("figures/figure2_bottomrow.png", dpi=300, bbox_inches='tight')
-    # logging.info("Saved figure2_bottomrow.png")
-    # plt.close(fig)
+    fig.savefig("figures/figure2b_bottomrow.png", dpi=300, bbox_inches='tight')
+    logging.info("Saved figure2b_bottomrow.png")
+    plt.close(fig)
     # %%
