@@ -5,6 +5,7 @@ List of variable strings used in the data transfer commands.
 .FLN*.
 .FSN*.
 .FLUT*.
+.PRECT.
 
 If I open a connection with -M it should allow me to reuse the SSH connection for multiple file transfers, so I can run multiple commands in a row without having to re-enter my password each time. For example:
 casp
@@ -91,4 +92,8 @@ find /glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/b.e21.B1850.f09_g17
 
 ./job_scripts/gdex_file_transfer.sh "*month_1/**b.e21.B1850.f09_g17.CMIP6-piControl.001.cam.h0.TS.*" /glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/b.e21.B1850.f09_g17.CMIP6-piControl.001 josh2250@login.rc.colorado.edu:/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_1850control/b.e21.B1850.f09_g17.CMIP6-piControl.001/
 
+__CESM2 Single Forcing Ensemble examples:__
 
+find /gdex/data/d651055/CESM2-SF -wholename "*month_1/**b.e21.B1850cmip6.f09_g17.CESM2-SF-EE*.cam.h0.TS.*"
+
+./job_scripts/gdex_file_transfer.sh "*month_1/**b.e21.B1850cmip6.f09_g17.CESM2-SF-EE*.cam.h0.TS.*" /gdex/data/d651055/CESM2-SF josh2250@login.rc.colorado.edu:/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_SF/d651055/CESM2-SF/

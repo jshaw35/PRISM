@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(mess
 def average_spatially(
     datapath,
     verbose=False,
-    average_vars = ["CLDTOT", "FLNS", "FLNSC", "FLNT", "FLNTC", "FLNR", "FLUT", "FSNR", "FSNT", "FSNS", "FSNSC", "FSNTOA", "FSNTC", "FLNTCLR", "FSNTOAC", "LHFLX", "SHFLX", "TS"],
+    average_vars = ["CLDTOT", "FLNS", "FLNSC", "FLNT", "FLNTC", "FLNR", "FLUT", "FSNR", "FSNT", "FSNS", "FSNSC", "FSNTOA", "FSNTC", "FLNTCLR", "FSNTOAC", "LHFLX", "SHFLX", "TS", "PRECT"],
 ):
     ds = xr.open_dataset(datapath)
 
@@ -77,6 +77,9 @@ if __name__ == "__main__":
     curc_cesm2_1850control_datapath = "/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_1850control/"
     curc_cesm2_1850control_outpath = "/home/josh2250/projects/PRISM/data/RadInt_procdata/CESM2_1850control/"
 
+    curc_cesm2_sf_datapath = "/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_SF/"
+    curc_cesm2_sf_outpath = "/home/josh2250/projects/PRISM/data/RadInt_procdata/CESM2_SF/"
+
     crawl_and_process(curc_lme_datapath, curc_lme_outpath, average_spatially)
     crawl_and_process(curc_cesm2_245_datapath, curc_cesm2_245_outpath, average_spatially)
     crawl_and_process(curc_ariseSAI_datapath, curc_ariseSAI_outpath, average_spatially)
@@ -84,4 +87,5 @@ if __name__ == "__main__":
     crawl_and_process(curc_cesm2_le_datapath, curc_cesm2_le_outpath, average_spatially)
     crawl_and_process(curc_cesm2_mcb_datapath, curc_cesm2_mcb_outpath, average_spatially)
     crawl_and_process(curc_cesm2_1850control_datapath, curc_cesm2_1850control_outpath, average_spatially)
+    crawl_and_process(curc_cesm2_sf_datapath, curc_cesm2_sf_outpath, average_spatially)
 
