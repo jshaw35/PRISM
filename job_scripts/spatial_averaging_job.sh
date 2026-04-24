@@ -15,8 +15,8 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --job-name=spatial_average_CESM_data
-#SBATCH --output=spatial_average_CESM_data_%A_%a.out
-#SBATCH --error=spatial_average_CESM_data_%A_%a.err
+#SBATCH --output=/projects/josh2250/PRISM/job_logs/spatial_average_CESM_data_%A_%a.out
+#SBATCH --error=/projects/josh2250/PRISM/job_logs/spatial_average_CESM_data_%A_%a.err
 #SBATCH --mail-user=josh2250@colorado.edu
 #SBATCH --mail-type=ALL
 # #SBATCH --array=101-173    # 73 measurements from the ensemble_profiles to process

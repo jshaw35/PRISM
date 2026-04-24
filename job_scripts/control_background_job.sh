@@ -10,7 +10,7 @@
 #SBATCH --time=00:59:59
 #SBATCH --partition=amilan
 #SBATCH --qos=normal
-#SBATCH --mem=8G
+#SBATCH --mem=32G
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --job-name=control_background_CESM
@@ -25,3 +25,4 @@ conda activate /curc/sw/anaconda3/2023.09/envs/ATOC_NWP
 python /projects/josh2250/PRISM/J05_CESM_compute_background.py
 
 # Submit with sbatch
+# sbatch job_scripts/control_background_job.sh
