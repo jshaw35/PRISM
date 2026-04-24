@@ -13,7 +13,7 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
 # %%
-varlist = ['CLDTOT', 'FLNR', 'FLNS', 'FLNSC', 'FLNT', 'FLNTC', 'FLNTCLR', 'FLUT', 'FSNR', 'FSNS', 'FSNSC', 'FSNT', 'FSNTC', 'FSNTOA', 'FSNTOAC', 'LHFLX', 'SHFLX', 'TS']
+varlist = ['CLDTOT', 'FLNR', 'FLNS', 'FLNSC', 'FLNT', 'FLNTC', 'FLNTCLR', 'FLUT', 'FSNR', 'FSNS', 'FSNSC', 'FSNT', 'FSNTC', 'FSNTOA', 'FSNTOAC', 'LHFLX', 'SHFLX', 'TS', "PRECT", "PRECC", "PRECL"]
 
 def compute_thermoprecip(
     ds,
@@ -83,6 +83,7 @@ def compute_background_state(
 ):
     label = pattern[0]
     glob_str = pattern[1]
+    os.makedirs(save_path, exist_ok=True)
     save_path = save_path / (case_name + ".nc")
     if save_path.exists():
         logging.info(f"{save_path} already exists, skipping computation for case {case_name}")
@@ -102,7 +103,7 @@ def compute_background_state(
     for i in range(len(precip_files["FLNT"])):
         print(i)
         trying_files = [precip_files[_var][i] for _var in precip_vars]
-        ds_merged = xr.open_mfdataset(trying_files, combine="by_coords")[precip_vars]
+        ds_merged = xr.open_mfdataset(trying_files, combine="by_coords", preprocess=lambda x: x.drop_vars(["time_written", "date_written"]))[precip_vars]
         # Get the time length and add it to weight the average by the number of time steps in each file later
         time_len = ds_merged.sizes["time"]
         if tslice is not None:
@@ -142,7 +143,7 @@ def compute_background_state(
         tmean_ds = xr.concat(tmean_ds_list, dim="index_t")
         weighted_tmean = tmean_ds.weighted(tmean_ds["time_len"]).mean(dim="index_t")
         mean_var_list.append(weighted_tmean)
-        break
+
     if not mean_var_list:
         logging.error(f"No variables were processed for case {case_name} with pattern {glob_str}. No output will be saved.")
         return
@@ -154,23 +155,25 @@ def compute_background_state(
 
 # %%
 if __name__ == "__main__":
-    # rawdata_root = Path("/home/josh2250/kaydata/jshaw/RadInt_rawdata/")
-    # save_path = Path("/home/josh2250/projects/PRISM/data/control_baselines/")
-
-    # case_dict = {
-    #     "CESM2_LME_control": ["b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008","CESM2_LME/d651078/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008/atm/proc/tseries/month_1/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008.cam.h0.*"],
-    #     # "CESM2_LME": ["b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002", "CESM2_LME/d651078/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002/atm/proc/tseries/month_1/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002.cam.h0.*"],
-    #     "CESM2_1850control": ["b.e21.B1850.f09_g17.CMIP6-piControl.001", "CESM2_1850control/b.e21.B1850.f09_g17.CMIP6-piControl.001/atm/proc/tseries/month_1/b.e21.B1850.f09_g17.CMIP6-piControl.001.cam.h0.*"],
-    # }
-
-    rawdata_root = Path("/gdex/data/")
-    save_path = Path("/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/data/control_baselines/")
+    # If on CURC
+    rawdata_root = Path("/home/josh2250/kaydata/jshaw/RadInt_rawdata/")
+    save_path = Path("/home/josh2250/projects/PRISM/data/control_baselines/")
 
     case_dict = {
-        "CESM2_LME_control": ["b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008","d651078/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008/atm/proc/tseries/month_1/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008.cam.h0.*"],
+        "CESM2_LME_control": ["b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008","CESM2_LME/d651078/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008/atm/proc/tseries/month_1/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008.cam.h0.*"],
         # "CESM2_LME": ["b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002", "CESM2_LME/d651078/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002/atm/proc/tseries/month_1/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002.cam.h0.*"],
-        "CESM2_1850control": ["b.e21.B1850.f09_g17.CMIP6-piControl.001", "b.e21.B1850.f09_g17.CMIP6-piControl.001/atm/proc/tseries/month_1/b.e21.B1850.f09_g17.CMIP6-piControl.001.cam.h0.*"],
+        "CESM2_1850control": ["b.e21.B1850.f09_g17.CMIP6-piControl.001", "CESM2_1850control/b.e21.B1850.f09_g17.CMIP6-piControl.001/atm/proc/tseries/month_1/b.e21.B1850.f09_g17.CMIP6-piControl.001.cam.h0.*.1?????-??????.nc"],
     }
+
+    # If on glade
+    # rawdata_root = Path("/gdex/data/")
+    # save_path = Path("/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/data/control_baselines/")
+
+    # case_dict = {
+    #     "CESM2_LME_control": ["b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008","d651078/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008/atm/proc/tseries/month_1/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008.cam.h0.*"],
+    #     # "CESM2_LME": ["b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002", "CESM2_LME/d651078/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002/atm/proc/tseries/month_1/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002.cam.h0.*"],
+    #     "CESM2_1850control": ["b.e21.B1850.f09_g17.CMIP6-piControl.001", "b.e21.B1850.f09_g17.CMIP6-piControl.001/atm/proc/tseries/month_1/b.e21.B1850.f09_g17.CMIP6-piControl.001.cam.h0.*"],
+    # }
 
     for case, pattern in case_dict.items():
         logging.info("Processing: %s, pattern: %s" % (case, pattern[0]))
@@ -181,44 +184,21 @@ if __name__ == "__main__":
             case,
             pattern,
         )
-        break
+        # break
 
     # %%
-    import matplotlib.pyplot as plt
-    precip_avg = precip_ds.mean(dim="time")
-    precip_avg.plot()
-    ds_avg = ds_merged.mean(dim="time")
+    # Testing code
+    # import matplotlib.pyplot as plt
+    # precip_avg = precip_ds.mean(dim="time")
+    # precip_avg.plot()
+    # ds_avg = ds_merged.mean(dim="time")
     # %%
-    fig,axs = plt.subplots(2,3, figsize=(15,6))
-    fig.subplots_adjust(hspace=0.4)
-    ds_avg["FLNT"].plot(ax=axs[0,0])
-    ds_avg["FLNS"].plot(ax=axs[0,1])
-    (ds_avg["FLNT"] - ds_avg["FLNS"]).plot(ax=axs[0,2])
-    ds_avg["FSNT"].plot(ax=axs[1,0])
-    ds_avg["FSNS"].plot(ax=axs[1,1])
-    (ds_avg["FSNT"] - ds_avg["FSNS"]).plot(ax=axs[1,2])
+    # fig,axs = plt.subplots(2,3, figsize=(15,6))
+    # fig.subplots_adjust(hspace=0.4)
+    # ds_avg["FLNT"].plot(ax=axs[0,0])
+    # ds_avg["FLNS"].plot(ax=axs[0,1])
+    # (ds_avg["FLNT"] - ds_avg["FLNS"]).plot(ax=axs[0,2])
+    # ds_avg["FSNT"].plot(ax=axs[1,0])
+    # ds_avg["FSNS"].plot(ax=axs[1,1])
+    # (ds_avg["FSNT"] - ds_avg["FSNS"]).plot(ax=axs[1,2])
     # %%
-    # ds_avg["SHFLX"].plot()
-    # %%
-    # cesm2_lme_control_str = "CESM2_LME/d651078/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008/atm/proc/tseries/month_1/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008.cam.h0.*"
-    # cesm2_lme_str = "CESM2_LME/d651078/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002/atm/proc/tseries/month_1/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002.cam.h0.*"
-
-    # cesm2_pi_control_str = "CESM2_1850control/b.e21.B1850.f09_g17.CMIP6-piControl.001/atm/proc/tseries/month_1/b.e21.B1850.f09_g17.CMIP6-piControl.001.cam.h0.*"
-
-    # %%
-
-    # curc_cesm2_lme_datapath = "/home/josh2250/projects/PRISM/data/RadInt_procdata/CESM2_LME/"
-    # curc_cesm2_lme_outpath = "/home/josh2250/projects/PRISM/data/control_baselines/CESM2_LME/"
-
-    # curc_cesm2_le_datapath = "/home/josh2250/projects/PRISM/data/RadInt_procdata/CESM2_LE/"
-    # curc_cesm2_le_outpath = "/home/josh2250/projects/PRISM/data/control_baselines/CESM2_LE/"
-
-    # curc_cesm2_mcb_datapath = "/home/josh2250/projects/PRISM/data/RadInt_procdata/CESM2_WACCM_SSP2-4.5_MCB/"
-    # curc_cesm2_mcb_outpath = "/home/josh2250/projects/PRISM/data/control_baselines/CESM2_WACCM_SSP2-4.5_MCB/"
-
-    # crawl_and_process(curc_lme_datapath, curc_lme_outpath, average_spatially)
-    # crawl_and_process(curc_cesm2_245_datapath, curc_cesm2_245_outpath, average_spatially)
-    # crawl_and_process(curc_ariseSAI_datapath, curc_ariseSAI_outpath, average_spatially)
-    # crawl_and_process(curc_cesm2_lme_datapath, curc_cesm2_lme_outpath, average_spatially)
-    # crawl_and_process(curc_cesm2_le_datapath, curc_cesm2_le_outpath, average_spatially)
-    # crawl_and_process(curc_cesm2_mcb_datapath, curc_cesm2_mcb_outpath, average_spatially)

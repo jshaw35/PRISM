@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(mess
 def average_spatially(
     datapath,
     verbose=False,
-    average_vars = ["CLDTOT", "FLNS", "FLNSC", "FLNT", "FLNTC", "FLNR", "FLUT", "FSNR", "FSNT", "FSNS", "FSNSC", "FSNTOA", "FSNTC", "FLNTCLR", "FSNTOAC", "LHFLX", "SHFLX", "TS", "PRECT"],
+    average_vars = ["CLDTOT", "FLNS", "FLNSC", "FLNT", "FLNTC", "FLNR", "FLUT", "FSNR", "FSNT", "FSNS", "FSNSC", "FSNTOA", "FSNTC", "FLNTCLR", "FSNTOAC", "LHFLX", "SHFLX", "TS", "PRECT", "PRECC", "PRECL"],
 ):
     ds = xr.open_dataset(datapath)
 
