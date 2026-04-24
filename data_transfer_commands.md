@@ -63,7 +63,8 @@ find /gdex/data/d651078/ -wholename "*month_1/**.TS.*"
 
 find /gdex/data/d651078/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008/ -wholename "*month_1/**.TS.*"
 
-./job_scripts/gdex_file_transfer.sh "*month_1/**.TS.*" /gdex/data/d651078/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008 josh2250@login.rc.colorado.edu:/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_LME/d651078/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008/
+_NOTE: The control run does not have PRECT, but does not PRECL and PRECC._
+./job_scripts/gdex_file_transfer.sh "*month_1/**.PREC?.*" /gdex/data/d651078/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008 josh2250@login.rc.colorado.edu:/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_LME/d651078/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008/
 
 __CESM2-LE examples:__
 *I will try to get a few ensemble members from both the original and SMBB simulations before branching to SSP.*
