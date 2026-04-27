@@ -15,6 +15,7 @@ P = (1 - r_mo^2) [Phase Error: the error from the spatial pattern]
 
 """
 # %%
+import pandas as pd
 import xarray as xr
 import numpy as np
 import os
@@ -69,6 +70,7 @@ def compute_error_decomposition(
     test_path: str,
     control_ds: xr.Dataset,
     var_detect_str: str = "h0",
+    time_fcn: callable = lambda da: da.groupby("time.year").mean("time"),
 ):
     """Compute the error decomposition per Medeiros (2023) and Simpson et al. (2020) weighting by np.cos(np.deg2rad(ds["lat"])).
 
@@ -89,12 +91,21 @@ def compute_error_decomposition(
     name_parts = filename.split(".")
     marker_idx = name_parts.index(var_detect_str)
     test_var = name_parts[marker_idx + 1]
+    if test_var not in control_ds.data_vars:
+        logging.error(f"Variable {test_var} not found in control dataset.")
+        return None
 
     test_da = xr.open_dataset(test_path)[test_var]
+    # Handle the CESM time coordinate issue and challenges with cftime.DatetimeNoLeap
+    if test_da["time"][0]["time.month"] == 2:
+        test_da = test_da.assign_coords(
+            time=shift_noleap_time_back_one_month(test_da["time"].values)
+        )
+    test_da = time_fcn(test_da) # Take annual mean to match the control dataset
     control_da = control_ds[test_var]
 
     # Compute decomposition per time step over spatial dimensions with area weighting.
-    spatial_dims = [d for d in test_da.dims if d != "time"]
+    spatial_dims = [d for d in test_da.dims if d not in ["time", "year"]]
     lat_dim = "lat" if "lat" in test_da.dims else ("latitude" if "latitude" in test_da.dims else None)
     if lat_dim is None:
         raise ValueError("Expected a latitude dimension named 'lat' or 'latitude'.")
@@ -151,6 +162,36 @@ def crawl_and_process2(input_dir, output_dir, process_fn, **fn_args):
             data.to_netcdf(dst)
 
 
+def shift_noleap_time_back_one_month(time_values):
+    t = np.asarray(time_values)
+    n = t.size
+
+    years = np.fromiter((v.year for v in t), dtype=np.int32, count=n)
+    months = np.fromiter((v.month for v in t), dtype=np.int16, count=n)
+    days = np.fromiter((v.day for v in t), dtype=np.int16, count=n)
+    hours = np.fromiter((v.hour for v in t), dtype=np.int16, count=n)
+    minutes = np.fromiter((v.minute for v in t), dtype=np.int16, count=n)
+    seconds = np.fromiter((v.second for v in t), dtype=np.int16, count=n)
+    microseconds = np.fromiter((v.microsecond for v in t), dtype=np.int32, count=n)
+
+    months = months - 1
+    jan_mask = months == 0
+    months[jan_mask] = 12
+    years[jan_mask] = years[jan_mask] - 1
+
+    days_in_month = np.array([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31], dtype=np.int16)
+    days = np.minimum(days, days_in_month[months - 1])
+
+    dt_type = type(t[0])
+    return np.array(
+        [
+            dt_type(int(y), int(m), int(d), int(h), int(mi), int(s), int(us))
+            for y, m, d, h, mi, s, us in zip(years, months, days, hours, minutes, seconds, microseconds)
+        ],
+        dtype=object,
+    )
+
+
 # %%
 if __name__ == "__main__":
     # CURC paths
@@ -163,32 +204,80 @@ if __name__ == "__main__":
     #     "CESM2_1850control": ["b.e21.B1850.f09_g17.CMIP6-piControl.001", "CESM2_1850control/b.e21.B1850.f09_g17.CMIP6-piControl.001/atm/proc/tseries/month_1/b.e21.B1850.f09_g17.CMIP6-piControl.001.cam.h0.*.nc"],
     # }
 
+    # compare_paths = {
+    #     "CESM2_LME": f"{str(rawdata_loadpath)}/CESM2_LME/",
+    #     "CESM2_1850control": f"{str(rawdata_loadpath)}/CESM2_1850control/",
+    #     "CESM2_LE": f"{str(rawdata_loadpath)}/CESM2_LE/",
+    #     "ARISE_SAI": f"{str(rawdata_loadpath)}/ARISE_SAI/",
+    #     "CESM2_WACCM_SSP2-4.5": f"{str(rawdata_loadpath)}/CESM2_WACCM_SSP2-4.5/",
+    #     "CESM2_WACCM_SSP2-4.5_MCB": f"{str(rawdata_loadpath)}/CESM2_WACCM_SSP2-4.5_MCB/",
+    # }
+
+    # I NEED TO FIX PATH STUFF HERE IN a way that allows me both to test on Glade and to run on CURC.
+
     # Glade test paths
     control_loadpath = Path("/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/data/control_baselines/")
     rawdata_loadpath = Path("/gdex/data/")
     save_path = Path("/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/data/error_relativetobaseline/")
 
-    case_dict = {
-        "CESM2_LME_control": ["b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008","d651078/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008/atm/proc/tseries/month_1/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008.cam.h0.*"],
-    }
+    # case_dict = {
+    #     "CESM2_LME_control": ["b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008","d651078/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008/atm/proc/tseries/month_1/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008.cam.h0.*"],
+    # }
 
-    rawdata_loadpath = Path("/home/josh2250/kaydata/jshaw/RadInt_rawdata/")
-    savepath = Path("/home/josh2250/projects/PRISM/data/error_relativetobaseline/")
-
-
+    # Keys are the controls and the values are lists of cases to compare to that control.
     compare_cases = {
         "CESM2_LME_control": ["CESM2_LME"],
         "CESM2_1850control": ["CESM2_1850control", "CESM2_LE", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"]
     }
+    # Keys are the cases to compare and the values are the paths to the files to compare.
+    compare_paths = {
+        "CESM2_LME": f"{str(rawdata_loadpath)}/d651078/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002/atm/proc/tseries/month_1/",
+    }
+    # %%
     # Find the control files in the control load path where the filename matches the pattern in case_dict + nc
-    for case, caselist in case_dict.items():
-        logging.info(f"Processing case: {case}")
-        for compare_case in caselist:
+    for control_case in compare_cases:
+        logging.info(f"Processing case: {control_case}")
+        control_path = str(control_loadpath) + "/" + control_case + ".nc"
+        control_ds = xr.open_dataset(control_path)
+        for compare_case in compare_cases[control_case]:
             logging.info(f"Comparing to case: {compare_case}")
-            input_dir = rawdata_loadpath / compare_case
-            control_path = str(control_loadpath) + "/" + case + ".nc"
-            control_ds = xr.open_dataset(control_path)
+            # input_dir = rawdata_loadpath / compare_case
+            input_dir = compare_paths[compare_case]
             
-            crawl_and_process2(input_dir, savepath, compute_error_decomposition, control_ds=control_ds)
+            crawl_and_process2(
+                input_dir,
+                save_path,
+                compute_error_decomposition,
+                control_ds=control_ds,
+                time_fcn=lambda da: da.groupby("time.year").mean("time"), # Annual averages
+                # time_fcn=lambda da: da.resample(time='10YE', offset=pd.Timedelta(weeks=-52)).mean().groupby("time.year").mean(), # Decadal averages
+            )
             break
         break
+    # %%
+import matplotlib.pyplot as plt
+# test_path = "data/error_relativetobaseline/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002.cam.h0.CLDTOT.170001-174912.nc"
+# test_var = "CLDTOT"
+# test_path = "data/error_relativetobaseline/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002.cam.h0.FLNT.115001-119912.nc"
+# test_var = "FLNT"
+test_path = "data/error_relativetobaseline/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002.cam.h0.FSNS.110001-114912.nc"
+test_var = "FSNS"
+test_ds = xr.open_dataset(test_path)
+
+fig = plt.figure()
+fig.suptitle("NMSE and components for variable: " + test_var)
+test_ds[test_var].sel(error_component="NMSE").plot(label="NMSE")
+test_ds[test_var].sel(error_component="U").plot(label="U")
+test_ds[test_var].sel(error_component="C").plot(label="C")
+test_ds[test_var].sel(error_component="P").plot(label="P")
+plt.legend()
+
+fig = plt.figure()
+fig.suptitle("Testing closure of the decomposition: NMSE versus the sum of U, C, and P")
+test_ds[test_var].drop_sel(error_component="NMSE").sum("error_component").plot()
+test_ds[test_var].sel(error_component="NMSE").plot()
+
+fig = plt.figure()
+fig.suptitle("Testing closure of the decomposition: NMSE minus the sum of U, C, and P")
+(test_ds[test_var].sel(error_component="NMSE") - test_ds[test_var].drop_sel(error_component="NMSE").sum("error_component")).plot()
+# %%

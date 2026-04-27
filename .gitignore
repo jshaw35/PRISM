@@ -208,4 +208,5 @@ __marimo__/
 
 munged_data/
 data/RadInt_procdata/
+data/error_relativetobaseline/
 job_logs/
