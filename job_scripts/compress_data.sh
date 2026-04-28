@@ -20,6 +20,7 @@
 
 cd /home/josh2250/projects/PRISM/data
 
+# Global+hemispheric means
 FILE=../zipped_data/CESM2_SSP245_ARISE_data.zip
 if [ ! -e ${FILE} ]; then 
     zip -r ${FILE} RadInt_procdata/ARISE_SAI
@@ -69,6 +70,15 @@ else
     echo "${FILE} already exists"
 fi
 
+# Baseline fields
+FILE=../zipped_data/control_baselines.zip
+if [ ! -e ${FILE} ]; then 
+    zip -r ${FILE} control_baselines
+else
+    echo "${FILE} already exists"
+fi
+
+# NMSE components
 FILE=../zipped_data/CESM2_1850control_error_components.zip
 if [ ! -e ${FILE} ]; then 
     zip -r ${FILE} error_relativetobaseline/CESM2_1850control
