@@ -10,19 +10,19 @@
 #SBATCH --time=00:59:59
 #SBATCH --partition=amilan
 #SBATCH --qos=normal
-#SBATCH --mem=32G
+#SBATCH --mem=16G
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
-#SBATCH --job-name=control_background_CESM
-#SBATCH --output=/projects/josh2250/PRISM/job_logs/control_background_%A_%a.out
-#SBATCH --error=/projects/josh2250/PRISM/job_logs/control_background_%A_%a.err
+#SBATCH --job-name=compute_PRECIP_THERMO
+#SBATCH --output=/projects/josh2250/PRISM/job_logs/compute_PRECIP_THERMO_%A_%a.out
+#SBATCH --error=/projects/josh2250/PRISM/job_logs/compute_PRECIP_THERMO_%A_%a.err
 #SBATCH --mail-user=josh2250@colorado.edu
 #SBATCH --mail-type=ALL
 # #SBATCH --array=101-173    # 73 measurements from the ensemble_profiles to process
 
 ml anaconda
 conda activate /curc/sw/anaconda3/2023.09/envs/ATOC_NWP
-python /projects/josh2250/PRISM/J05_CESM_compute_background.py
+python /projects/josh2250/PRISM/J07_CESM_compute_THERMO_PRECIP.py
 
 # Submit with sbatch
-# sbatch job_scripts/control_background_job.sh
+# sbatch job_scripts/compute_PRECIP_THERMO.sh
