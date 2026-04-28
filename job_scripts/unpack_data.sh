@@ -10,6 +10,9 @@ unzip -n zipped_data/CESM2_SSP245_ARISE_data.zip -d data/
 unzip -n zipped_data/CESM2_SSP245_MCB_data.zip -d data/
 unzip -n zipped_data/CESM2_1850control_data.zip -d data/
 
+# Control baselines
+unzip -n zipped_data/control_baselines.zip -d data
+
 # NMSE error components
 unzip -n zipped_data/CESM2_LME_control_error_components.zip -d data/
 unzip -n zipped_data/CESM2_1850control_error_components.zip -d data/
