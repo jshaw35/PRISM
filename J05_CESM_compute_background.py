@@ -13,7 +13,7 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
 # %%
-varlist = ['CLDTOT', 'FLNR', 'FLNS', 'FLNSC', 'FLNT', 'FLNTC', 'FLNTCLR', 'FLUT', 'FSNR', 'FSNS', 'FSNSC', 'FSNT', 'FSNTC', 'FSNTOA', 'FSNTOAC', 'LHFLX', 'SHFLX', 'TS', "PRECT", "PRECC", "PRECL"]
+varlist = ['CLDTOT', 'FLNR', 'FLNS', 'FLNSC', 'FLNT', 'FLNTC', 'FLNTCLR', 'FLUT', 'FLUTC', 'FSNR', 'FSNS', 'FSNSC', 'FSNT', 'FSNTC', 'FSNTOA', 'FSNTOAC', 'LHFLX', 'SHFLX', 'TS', "PRECT", "PRECC", "PRECL"]
 
 def compute_thermoprecip(
     ds,
@@ -89,6 +89,9 @@ def compute_background_state(
         logging.info(f"{save_path} already exists, skipping computation for case {case_name}")
         return
     filepaths = list(rawdata_root.glob(glob_str))
+    if len(filepaths) < 1:
+        logging.info(f"No files found for root '{str(rawdata_root)}' and glob string '{glob_str}'")
+        return
 
     mean_var_list = []
 
@@ -163,8 +166,12 @@ if __name__ == "__main__":
         "CESM2_LME_control": ["b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008","CESM2_LME/d651078/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008/atm/proc/tseries/month_1/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008.cam.h0.*"],
         # "CESM2_LME": ["b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002", "CESM2_LME/d651078/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002/atm/proc/tseries/month_1/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002.cam.h0.*"],
         "CESM2_1850control": ["b.e21.B1850.f09_g17.CMIP6-piControl.001", "CESM2_1850control/b.e21.B1850.f09_g17.CMIP6-piControl.001/atm/proc/tseries/month_1/b.e21.B1850.f09_g17.CMIP6-piControl.001.cam.h0.*.1?????-??????.nc"],
+        "CESM2_LE_2000_2009_cmip6": ["b.e21.BHISTcmip6.f09_g17.LE2-1301.00?", "CESM2_LE/d651056/CESM2-LE/atm/proc/tseries/month_1/*/b.e21.BHISTcmip6.f09_g17.LE2-1301.00?.cam.h0.*.200001-200912.nc"],
+        "CESM2_LE_2000_2009_smbb": ["b.e21.BHISTsmbb.f09_g17.LE2-*.00?", "CESM2_LE/d651056/CESM2-LE/atm/proc/tseries/month_1/*/b.e21.BHISTsmbb.f09_g17.LE2-*.00?.cam.h0.*.200001-200912.nc"],
     }
 
+# ~/kaydata/jshaw/RadInt_rawdata/CESM2_LE/d651056/CESM2-LE/atm/proc/tseries/month_1/*/b.e21.BHISTcmip6.f09_g17.LE2-1301.00?.cam.h0.*.200001-200912.nc
+# ~/kaydata/jshaw/RadInt_rawdata/CESM2_LE/d651056/CESM2-LE/atm/proc/tseries/month_1/*/b.e21.BHISTsmbb.f09_g17.LE2-*.00?.cam.h0.*.200001-200912.nc
     # If on glade
     # rawdata_root = Path("/gdex/data/")
     # save_path = Path("/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/data/control_baselines/")

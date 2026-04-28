@@ -25,7 +25,7 @@ from pathlib import Path
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
 # %%
-varlist = ['CLDTOT', 'FLNR', 'FLNS', 'FLNSC', 'FLNT', 'FLNTC', 'FLNTCLR', 'FLUT', 'FSNR', 'FSNS', 'FSNSC', 'FSNT', 'FSNTC', 'FSNTOA', 'FSNTOAC', 'LHFLX', 'SHFLX', 'TS', "PRECT", "PRECC", "PRECL"]
+varlist = ['CLDTOT', 'FLNR', 'FLNS', 'FLNSC', 'FLNT', 'FLNTC', 'FLNTCLR', 'FLUT', 'FSNR', 'FSNS', 'FSNSC', 'FSNT', 'FSNTC', 'FSNTOA', 'FSNTOAC', 'LHFLX', 'SHFLX', 'TS', "PRECT", "PRECC", "PRECL", "PRECIP_THERMO"]
 
 
 def compute_thermoprecip(
@@ -195,89 +195,86 @@ def shift_noleap_time_back_one_month(time_values):
 # %%
 if __name__ == "__main__":
     # CURC paths
-    # control_loadpath = Path("/home/josh2250/projects/PRISM/data/control_baselines/")
-    # rawdata_loadpath = Path("/home/josh2250/kaydata/jshaw/RadInt_rawdata/")
-    # savepath = Path("/home/josh2250/projects/PRISM/data/error_relativetobaseline/")
-
-    # case_dict = {
-    #     "CESM2_LME_control": ["b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008","CESM2_LME/d651078/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008/atm/proc/tseries/month_1/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008.cam.h0.*"],
-    #     "CESM2_1850control": ["b.e21.B1850.f09_g17.CMIP6-piControl.001", "CESM2_1850control/b.e21.B1850.f09_g17.CMIP6-piControl.001/atm/proc/tseries/month_1/b.e21.B1850.f09_g17.CMIP6-piControl.001.cam.h0.*.nc"],
-    # }
-
-    # compare_paths = {
-    #     "CESM2_LME": f"{str(rawdata_loadpath)}/CESM2_LME/",
-    #     "CESM2_1850control": f"{str(rawdata_loadpath)}/CESM2_1850control/",
-    #     "CESM2_LE": f"{str(rawdata_loadpath)}/CESM2_LE/",
-    #     "ARISE_SAI": f"{str(rawdata_loadpath)}/ARISE_SAI/",
-    #     "CESM2_WACCM_SSP2-4.5": f"{str(rawdata_loadpath)}/CESM2_WACCM_SSP2-4.5/",
-    #     "CESM2_WACCM_SSP2-4.5_MCB": f"{str(rawdata_loadpath)}/CESM2_WACCM_SSP2-4.5_MCB/",
-    # }
-
-    # I NEED TO FIX PATH STUFF HERE IN a way that allows me both to test on Glade and to run on CURC.
-
-    # Glade test paths
-    control_loadpath = Path("/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/data/control_baselines/")
-    rawdata_loadpath = Path("/gdex/data/")
-    save_path = Path("/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/data/error_relativetobaseline/")
-
-    # case_dict = {
-    #     "CESM2_LME_control": ["b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008","d651078/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008/atm/proc/tseries/month_1/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008.cam.h0.*"],
-    # }
+    control_loadpath = Path("/home/josh2250/projects/PRISM/data/control_baselines/")
+    rawdata_loadpath = Path("/home/josh2250/kaydata/jshaw/RadInt_rawdata/")
+    save_path = Path("/home/josh2250/projects/PRISM/data/error_relativetobaseline/")
 
     # Keys are the controls and the values are lists of cases to compare to that control.
     compare_cases = {
         "CESM2_LME_control": ["CESM2_LME"],
-        "CESM2_1850control": ["CESM2_1850control", "CESM2_LE", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"]
+        "CESM2_1850control": ["CESM2_1850control", "CESM2_LE", "CESM2_SF", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
+        "CESM2_LE_2000_2009_cmip6": ["CESM2_1850control", "CESM2_LE", "CESM2_SF", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
+        "CESM2_LE_2000_2009_smbb": ["CESM2_1850control", "CESM2_LE", "CESM2_SF", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
     }
-    # Keys are the cases to compare and the values are the paths to the files to compare.
+
     compare_paths = {
-        "CESM2_LME": f"{str(rawdata_loadpath)}/d651078/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002/atm/proc/tseries/month_1/",
+        "CESM2_LME": f"{str(rawdata_loadpath)}/CESM2_LME/",
+        "CESM2_1850control": f"{str(rawdata_loadpath)}/CESM2_1850control/",
+        "CESM2_LE": f"{str(rawdata_loadpath)}/CESM2_LE/",
+        "CESM2_SF": f"{str(rawdata_loadpath)}/CESM2_SF/",
+        "ARISE_SAI": f"{str(rawdata_loadpath)}/ARISE_SAI/",
+        "CESM2_WACCM_SSP2-4.5": f"{str(rawdata_loadpath)}/CESM2_WACCM_SSP2-4.5/",
+        "CESM2_WACCM_SSP2-4.5_MCB": f"{str(rawdata_loadpath)}/CESM2_WACCM_SSP2-4.5_MCB/",
     }
+
+    # # Glade test paths
+    # control_loadpath = Path("/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/data/control_baselines/")
+    # rawdata_loadpath = Path("/gdex/data/")
+    # save_path = Path("/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/data/error_relativetobaseline/")
+
+    # # Keys are the controls and the values are lists of cases to compare to that control.
+    # compare_cases = {
+    #     "CESM2_LME_control": ["CESM2_LME"],
+    #     "CESM2_1850control": ["CESM2_1850control", "CESM2_LE", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"]
+    # }
+    # # Keys are the cases to compare and the values are the paths to the files to compare.
+    # compare_paths = {
+    #     "CESM2_LME": f"{str(rawdata_loadpath)}/d651078/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002/atm/proc/tseries/month_1/",
+    # }
+
     # %%
-    # Find the control files in the control load path where the filename matches the pattern in case_dict + nc
     for control_case in compare_cases:
         logging.info(f"Processing case: {control_case}")
         control_path = str(control_loadpath) + "/" + control_case + ".nc"
         control_ds = xr.open_dataset(control_path)
         for compare_case in compare_cases[control_case]:
             logging.info(f"Comparing to case: {compare_case}")
-            # input_dir = rawdata_loadpath / compare_case
             input_dir = compare_paths[compare_case]
             
             crawl_and_process2(
                 input_dir,
-                save_path,
+                save_path / control_case / compare_case,
                 compute_error_decomposition,
                 control_ds=control_ds,
                 time_fcn=lambda da: da.groupby("time.year").mean("time"), # Annual averages
-                # time_fcn=lambda da: da.resample(time='10YE', offset=pd.Timedelta(weeks=-52)).mean().groupby("time.year").mean(), # Decadal averages
+                # time_fcn=lambda da: da.resample(time='10YE', offset=pd.Timedelta(weeks=-52)).mean().groupby("time.year").mean(), # Decadal averages, but doesn't play well with file edges
             )
-            break
-        break
+            # break
+        # break
     # %%
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 # test_path = "data/error_relativetobaseline/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002.cam.h0.CLDTOT.170001-174912.nc"
 # test_var = "CLDTOT"
 # test_path = "data/error_relativetobaseline/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002.cam.h0.FLNT.115001-119912.nc"
 # test_var = "FLNT"
-test_path = "data/error_relativetobaseline/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002.cam.h0.FSNS.110001-114912.nc"
-test_var = "FSNS"
-test_ds = xr.open_dataset(test_path)
+# test_path = "data/error_relativetobaseline/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002.cam.h0.FSNS.110001-114912.nc"
+# test_var = "FSNS"
+# test_ds = xr.open_dataset(test_path)
 
-fig = plt.figure()
-fig.suptitle("NMSE and components for variable: " + test_var)
-test_ds[test_var].sel(error_component="NMSE").plot(label="NMSE")
-test_ds[test_var].sel(error_component="U").plot(label="U")
-test_ds[test_var].sel(error_component="C").plot(label="C")
-test_ds[test_var].sel(error_component="P").plot(label="P")
-plt.legend()
+# fig = plt.figure()
+# fig.suptitle("NMSE and components for variable: " + test_var)
+# test_ds[test_var].sel(error_component="NMSE").plot(label="NMSE")
+# test_ds[test_var].sel(error_component="U").plot(label="U")
+# test_ds[test_var].sel(error_component="C").plot(label="C")
+# test_ds[test_var].sel(error_component="P").plot(label="P")
+# plt.legend()
 
-fig = plt.figure()
-fig.suptitle("Testing closure of the decomposition: NMSE versus the sum of U, C, and P")
-test_ds[test_var].drop_sel(error_component="NMSE").sum("error_component").plot()
-test_ds[test_var].sel(error_component="NMSE").plot()
+# fig = plt.figure()
+# fig.suptitle("Testing closure of the decomposition: NMSE versus the sum of U, C, and P")
+# test_ds[test_var].drop_sel(error_component="NMSE").sum("error_component").plot()
+# test_ds[test_var].sel(error_component="NMSE").plot()
 
-fig = plt.figure()
-fig.suptitle("Testing closure of the decomposition: NMSE minus the sum of U, C, and P")
-(test_ds[test_var].sel(error_component="NMSE") - test_ds[test_var].drop_sel(error_component="NMSE").sum("error_component")).plot()
+# fig = plt.figure()
+# fig.suptitle("Testing closure of the decomposition: NMSE minus the sum of U, C, and P")
+# (test_ds[test_var].sel(error_component="NMSE") - test_ds[test_var].drop_sel(error_component="NMSE").sum("error_component")).plot()
 # %%
