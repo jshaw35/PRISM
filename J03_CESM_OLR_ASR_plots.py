@@ -179,6 +179,12 @@ if __name__ == "__main__":
             "append_case": "CESM2-SSP2-4.5",
             "ufunc": None,
         },
+        "ARISE-SAI_extended": {
+            "path": "data/RadInt_procdata/ARISE_SAI/",
+            "case_str": "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.001",
+            "append_case": "ARISE-SAI",
+            "ufunc": None,
+        },
         "CESM2-SSP2-4.5_MCB": {
             "path": "data/RadInt_procdata/CESM2_WACCM_SSP2-4.5_MCB/",
             "case_str": "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.001",
@@ -252,7 +258,8 @@ if __name__ == "__main__":
         "CESM2-SSP2-4.5": {
             "ylims": (236, 245),
             "xlims": (236, 245),
-            "cbar_ticks": np.arange(1850, 2086, 10),
+            # "cbar_ticks": np.arange(1850, 2086, 10),
+            "cbar_ticks": np.arange(1850, 2101, 10),
             "cbar_ylabel": None,
         },
         "ARISE-SAI": {
@@ -261,10 +268,18 @@ if __name__ == "__main__":
             "cbar_ticks": np.arange(1850, 2086, 10),
             "cbar_ylabel": None,
         },
+        "ARISE-SAI_extended": {
+            "ylims": (236, 245),
+            "xlims": (236, 245),
+            # "cbar_ticks": np.arange(1850, 2086, 10),
+            "cbar_ticks": np.arange(1850, 2101, 10),
+            "cbar_ylabel": None,
+        },
         "CESM2-SSP2-4.5_MCB": {
             "ylims": (236, 245),
             "xlims": (236, 245),
-            "cbar_ticks": np.arange(1850, 2071, 10),
+            # "cbar_ticks": np.arange(1850, 2071, 10),
+            "cbar_ticks": np.arange(1850, 2101, 10),
             "cbar_ylabel": None,
         },
     }
@@ -276,6 +291,7 @@ if __name__ == "__main__":
     # caxes = [fig.add_axes([0.46, 0.15, 0.01, 0.7]), fig.add_axes([0.92, 0.15, 0.01, 0.7])] # create separate colorbar axes for each subplot
     cax = fig.add_axes([0.92, 0.15, 0.01, 0.7]) # create separate colorbar axes for each subplot
     caxes = [cax, cax]
+    outs_list = []
     case_list = ["CESM-LME", "CESM2-LME"]
     add_colorbar = {
         "CESM-LME": True,
@@ -283,15 +299,17 @@ if __name__ == "__main__":
     }
     cmap = sns.color_palette("viridis", as_cmap=True)
 
-    year_step = 10
+    year_step = 20
+    tick_step = 100
     year_min = min([*[PLOT_CONFIGS[i]["cbar_ticks"][0] for i in case_list]])
     year_max = max([*[PLOT_CONFIGS[i]["cbar_ticks"][-1] for i in case_list]])
     year_bounds = np.arange(year_min, year_max + 1, year_step)
+    cbar_ticks = np.arange(year_min, year_max + 1, tick_step)
 
     min_val = min(PLOT_CONFIGS[case_label]["xlims"][0], PLOT_CONFIGS[case_label]["ylims"][0])
     max_val = min(PLOT_CONFIGS[case_label]["xlims"][1], PLOT_CONFIGS[case_label]["ylims"][1])
 
-    norm = mpl.colors.BoundaryNorm(year_bounds, cmap.N, extend='both')
+    norm = mpl.colors.BoundaryNorm(year_bounds, cmap.N, extend='neither')
 
     for ax, cax, case_label in zip(axs, caxes, case_list):
         logging.info(f"Plotting case: {case_label}")
@@ -307,7 +325,7 @@ if __name__ == "__main__":
         asr_decadal = asr_ds.sel(spatial="G").resample(time='10YE').mean().groupby("time.year").mean()
         olr_decadal = olr_ds.sel(spatial="G").resample(time='10YE').mean().groupby("time.year").mean()
 
-        plot_radiative_imbalance_annual(
+        outs1 = plot_radiative_imbalance_annual(
             olr_annual,
             asr_annual,
             ax=ax,
@@ -318,7 +336,7 @@ if __name__ == "__main__":
             line11=False,
             norm=norm,
         )
-        plot_radiative_imbalance_annual(
+        outs2 = plot_radiative_imbalance_annual(
             olr_decadal,
             asr_decadal,
             ax=ax,
@@ -329,6 +347,7 @@ if __name__ == "__main__":
             line11=False,
             norm=norm,
         )
+        outs_list.append((outs1, outs2))
         ax.set_title(case_label)
     
     # Apply the plot config settings for each subplot
@@ -349,6 +368,8 @@ if __name__ == "__main__":
             linestyle="--",
             zorder=0,
         )
+    cbar = outs_list[0][-1][-1]
+    cbar.set_ticks(cbar_ticks)
 
     fig.savefig("figures/figure1_toprow.png", dpi=300, bbox_inches='tight')
     logging.info("Saved figure1_toprow.png")
@@ -359,26 +380,31 @@ if __name__ == "__main__":
     fig,axs = plt.subplots(1,3, figsize=(16,4.5))
     fig.subplots_adjust(wspace=0.35)
     # caxes = [fig.add_axes([0.33, 0.15, 0.01, 0.7]), fig.add_axes([0.62, 0.15, 0.01, 0.7]), fig.add_axes([0.905, 0.15, 0.01, 0.7])] # create separate colorbar axes for each subplot
-    case_list = ["CESM2-SSP2-4.5", "ARISE-SAI", "CESM2-SSP2-4.5_MCB"]
+    # case_list = ["CESM2-SSP2-4.5", "ARISE-SAI", "CESM2-SSP2-4.5_MCB"]
+    case_list = ["CESM2-SSP2-4.5", "ARISE-SAI_extended", "CESM2-SSP2-4.5_MCB"]
 
     cax = fig.add_axes([0.92, 0.15, 0.01, 0.7]) # create separate colorbar axes for each subplot
+    outs_list = []
     caxes = [cax, cax, cax]
     add_colorbar = {
         "CESM2-SSP2-4.5": True,
-        "ARISE-SAI": False,
+        "ARISE-SAI_extended": False,
+        # "ARISE-SAI": False,
         "CESM2-SSP2-4.5_MCB": False,
     }
     cmap = sns.color_palette("viridis", as_cmap=True)
 
-    year_step = 20
+    year_step = 5
+    tick_step = 25
     year_min = min([*[PLOT_CONFIGS[i]["cbar_ticks"][0] for i in case_list]])
     year_max = max([*[PLOT_CONFIGS[i]["cbar_ticks"][-1] for i in case_list]])
-    year_bounds = np.arange(year_min, year_max + year_step, year_step)
+    year_bounds = np.arange(year_min, year_max + 1, year_step)
+    cbar_ticks = np.arange(year_min, year_max + 1, tick_step)
 
     min_val = min(PLOT_CONFIGS[case_label]["xlims"][0], PLOT_CONFIGS[case_label]["ylims"][0])
     max_val = min(PLOT_CONFIGS[case_label]["xlims"][1], PLOT_CONFIGS[case_label]["ylims"][1])
 
-    norm = mpl.colors.BoundaryNorm(year_bounds, cmap.N, extend='both')
+    norm = mpl.colors.BoundaryNorm(year_bounds, cmap.N, extend="neither")
 
     for ax, cax, case_label in zip(axs, caxes, case_list):
         logging.info(f"Plotting case: {case_label}")
@@ -394,7 +420,7 @@ if __name__ == "__main__":
         asr_decadal = asr_ds.sel(spatial="G").resample(time='10YE').mean().groupby("time.year").mean()
         olr_decadal = olr_ds.sel(spatial="G").resample(time='10YE').mean().groupby("time.year").mean()
 
-        plot_radiative_imbalance_annual(
+        outs1 = plot_radiative_imbalance_annual(
             olr_annual,
             asr_annual,
             ax=ax,
@@ -405,7 +431,7 @@ if __name__ == "__main__":
             line11=False,
             norm=norm,
         )
-        plot_radiative_imbalance_annual(
+        outs2 = plot_radiative_imbalance_annual(
             olr_decadal,
             asr_decadal,
             ax=ax,
@@ -416,6 +442,7 @@ if __name__ == "__main__":
             line11=False,
             norm=norm,
         )
+        outs_list.append((outs1, outs2))
         ax.set_title(case_label)
     
     # Apply the plot config settings for each subplot
@@ -435,6 +462,8 @@ if __name__ == "__main__":
             linestyle="--",
             zorder=0,
         )
+    cbar = outs_list[0][-1][-1]
+    cbar.set_ticks(cbar_ticks)
 
     fig.savefig("figures/figure1_bottomrow.png", dpi=300, bbox_inches='tight')
     logging.info("Saved figure1_bottomrow.png")
