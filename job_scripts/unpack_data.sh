@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cd /home/josh2250/projects/PRISM
+cd /glade/u/home/jonahshaw/Scripts/git_repos/PRISM
 # Process global/hemispheric means
 unzip -n zipped_data/CESM_LME_data.zip -d data/
 unzip -n zipped_data/CESM2_LME_data.zip -d data/

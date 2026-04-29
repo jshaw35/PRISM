@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import seaborn as sns
 import pandas as pd
+from matplotlib.ticker import MultipleLocator
 
 import logging
 
@@ -327,12 +328,19 @@ if __name__ == "__main__":
             "path": "data/RadInt_procdata/CESM2_WACCM_SSP2-4.5/",
             "case_str": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.001",
             "append_case": "CESM2-LE",
-            "ufunc": lambda ds: ds.sel(time=slice(None, "2084-12-31")),
+            "ufunc": None,
+            # "ufunc": lambda ds: ds.sel(time=slice(None, "2084-12-31")),
         },
         "ARISE-SAI": {
             "path": "data/RadInt_procdata/ARISE_SAI/",
             "case_str": "1p5K-SAI.001",
             "append_case": "CESM2-SSP2-4.5",
+            "ufunc": None,
+        },
+        "ARISE-SAI_extended": {
+            "path": "data/RadInt_procdata/ARISE_SAI/",
+            "case_str": "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.001",
+            "append_case": "ARISE-SAI",
             "ufunc": None,
         },
         "CESM2-SSP2-4.5_MCB": {
@@ -388,8 +396,11 @@ if __name__ == "__main__":
     # %%
     PLOT_CONFIGS1 = {
         "CESM-LME": {
-            "ax1_lims": (228, 237),
-            "ax2_lims": (-3, 6),
+            # "ax1_lims": (228, 237),
+            # "ax2_lims": (-3, 6),
+            "ax1_lims": (230, 240),
+            "ax2_lims": (-8, 2),
+            "ax1_major_y": MultipleLocator(1),
             "axb1_lims": (-1.5e24, 1.5e24),
             "axb2_lims": (286.25, 287.75),
             "axb1_yticks": np.arange(-1.5e24, 1.5e24+0.01e24, 0.5e24),
@@ -399,8 +410,11 @@ if __name__ == "__main__":
             "keep_right_axes": True,
         },
         "CESM2-LME": {
-            "ax1_lims": (235, 244),
-            "ax2_lims": (-3, 6),
+            # "ax1_lims": (235, 244),
+            # "ax2_lims": (-3, 6),
+            "ax1_lims": (237, 247),
+            "ax2_lims": (-8, 2),
+            "ax1_major_y": MultipleLocator(1),
             "axb1_lims": (-0.5e24, 1.0e24),
             "axb2_lims": (287.0, 289.5),
             "axb1_yticks": np.arange(-0.5e24, 1.0e24+0.01e24, 0.25e24),
@@ -486,6 +500,9 @@ if __name__ == "__main__":
             axb.set_yticks(PLOT_CONFIGS[case_label]["axb1_yticks"])
         if "axb2_yticks" in PLOT_CONFIGS[case_label]:
             axb2.set_yticks(PLOT_CONFIGS[case_label]["axb2_yticks"])
+        if "ax1_major_y" in PLOT_CONFIGS[case_label]:
+            ax1.yaxis.set_major_locator(PLOT_CONFIGS[case_label]["ax1_major_y"])
+            ax1.grid(True, alpha=0.3)
 
         # Add a horizontal line at y=0 for the EEI subplot
         ax2.axhline(0, color='grey', linestyle='--', linewidth=1)
@@ -496,8 +513,8 @@ if __name__ == "__main__":
     # %%
     PLOT_CONFIGS2 = {
         "CESM2-SSP2-4.5": {
-            "ax1_lims": (237, 244),
-            "ax2_lims": (-4, 3),
+            "ax1_lims": (236, 244),
+            "ax2_lims": (-5, 3),
             # "axb1_lims": (0.0e24, 2.5e24),
             "axb1_lims": (-0.5e24, 2.5e24),
             "axb2_lims": (286.0, 292.0),
@@ -506,8 +523,18 @@ if __name__ == "__main__":
             "keep_right_axes": False,
         },
         "ARISE-SAI": {
-            "ax1_lims": (237, 244),
-            "ax2_lims": (-4, 3),
+            "ax1_lims": (236, 244),
+            "ax2_lims": (-5, 3),
+            # "axb1_lims": (0.0e24, 2.5e24),
+            "axb1_lims": (-0.5e24, 2.5e24),
+            "axb2_lims": (286.0, 292.0),
+            "xlims": (1850, 2100),
+            "keep_left_axes": False,
+            "keep_right_axes": False,
+        },
+        "ARISE-SAI_extended": {
+            "ax1_lims": (236, 244),
+            "ax2_lims": (-5, 3),
             # "axb1_lims": (0.0e24, 2.5e24),
             "axb1_lims": (-0.5e24, 2.5e24),
             "axb2_lims": (286.0, 292.0),
@@ -516,8 +543,8 @@ if __name__ == "__main__":
             "keep_right_axes": False,
         },
         "CESM2-SSP2-4.5_MCB": {
-            "ax1_lims": (237, 244),
-            "ax2_lims": (-4, 3),
+            "ax1_lims": (236, 244),
+            "ax2_lims": (-5, 3),
             # "axb1_lims": (0.0e24, 2.5e24),
             "axb1_lims": (-0.5e24, 2.5e24),
             "axb2_lims": (286.0, 292.0),
@@ -536,7 +563,8 @@ if __name__ == "__main__":
     fig, axes = plt.subplots(2, 3, figsize=(16, 10))
     fig.subplots_adjust(wspace=0.35)
     
-    case_list_2 = ["CESM2-SSP2-4.5", "ARISE-SAI", "CESM2-SSP2-4.5_MCB"]
+    # case_list_2 = ["CESM2-SSP2-4.5", "ARISE-SAI", "CESM2-SSP2-4.5_MCB"]
+    case_list_2 = ["CESM2-SSP2-4.5", "ARISE-SAI_extended", "CESM2-SSP2-4.5_MCB"]
     start_year_2 = 1850
 
     for ax, axb, case_label in zip(axes[0], axes[1], case_list_2):

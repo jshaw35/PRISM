@@ -170,13 +170,13 @@ def plot_radiative_imbalance_annual(
 
     if add_colorbar:
         if cax is None:
-            plt.colorbar(
+            cbar = plt.colorbar(
                 mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
                 ax=ax, orientation='vertical',
                 label="Year",
             )
         else:
-            plt.colorbar(
+            cbar = plt.colorbar(
                 mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
                 cax=cax, orientation='vertical',
                 label="Year",
@@ -199,6 +199,11 @@ def plot_radiative_imbalance_annual(
         ax.set_xlim(olr_da.min(), olr_da.max())
         ax.set_ylim(asr_da.min(), asr_da.max())
 
+    if add_colorbar:
+        if fig is None:
+            return ax, cbar
+        else:
+            return fig, ax, cbar
     if fig is None:
         return ax
     else:

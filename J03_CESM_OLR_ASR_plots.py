@@ -171,7 +171,8 @@ if __name__ == "__main__":
             "path": "data/RadInt_procdata/CESM2_WACCM_SSP2-4.5/",
             "case_str": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.001",
             "append_case": "CESM2-LE",
-            "ufunc": lambda ds: ds.sel(time=slice(None, "2084-12-31")),
+            "ufunc": None,
+            # "ufunc": lambda ds: ds.sel(time=slice(None, "2084-12-31")),
         },
         "ARISE-SAI": {
             "path": "data/RadInt_procdata/ARISE_SAI/",
@@ -240,7 +241,7 @@ if __name__ == "__main__":
         "CESM-LME": {
             "ylims": (230, 237),
             "xlims": (230, 237),
-            "cbar_ticks": np.arange(850, 2005, 100),
+            "cbar_ticks": np.arange(850, 1851, 100),
             "cbar_ylabel": None,
         },
         "CESM2-LME": {
@@ -258,7 +259,6 @@ if __name__ == "__main__":
         "CESM2-SSP2-4.5": {
             "ylims": (236, 245),
             "xlims": (236, 245),
-            # "cbar_ticks": np.arange(1850, 2086, 10),
             "cbar_ticks": np.arange(1850, 2101, 10),
             "cbar_ylabel": None,
         },
@@ -271,14 +271,12 @@ if __name__ == "__main__":
         "ARISE-SAI_extended": {
             "ylims": (236, 245),
             "xlims": (236, 245),
-            # "cbar_ticks": np.arange(1850, 2086, 10),
             "cbar_ticks": np.arange(1850, 2101, 10),
             "cbar_ylabel": None,
         },
         "CESM2-SSP2-4.5_MCB": {
             "ylims": (236, 245),
             "xlims": (236, 245),
-            # "cbar_ticks": np.arange(1850, 2071, 10),
             "cbar_ticks": np.arange(1850, 2101, 10),
             "cbar_ylabel": None,
         },
