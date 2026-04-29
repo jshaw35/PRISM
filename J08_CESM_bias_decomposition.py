@@ -133,47 +133,75 @@ if __name__ == "__main__":
             "path": root_dir + "data/error_relativetobaseline/CESM2_LME_control/",
             "subdirs": ["CESM2_LME"],
             "subdir_cases": {"CESM2_LME": ["b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008", "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002"]},
-            "append_case": None,
+            "append_cases": {
+                "b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008": None,
+                "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002": None,
+            },
             "ufunc": None,
         },
         "CESM2_1850control": {
             "path": root_dir + "data/error_relativetobaseline/CESM2_1850control/",
             "subdirs": ["ARISE_SAI", "CESM2_1850control", "CESM2_LE", "CESM2_SF", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
             "subdir_cases": {
-                "ARISE_SAI": ["1p5K-SAI.001", "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.001"],
                 "CESM2_1850control": ["b.e21.B1850.f09_g17.CMIP6-piControl.001"],
                 "CESM2_LE": ["b.e21.BHISTcmip6.f09_g17.LE2-1301.001"],
                 "CESM2_SF": ["b.e21.B1850cmip6.f09_g17.CESM2-SF-EE.101"],
                 "CESM2_WACCM_SSP2-4.5": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.001"],
+                "ARISE_SAI": ["1p5K-SAI.001", "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.001"],
                 "CESM2_WACCM_SSP2-4.5_MCB": ["b.e21.BSSP245smbb.f09_g17.MCB-050PCT.001"],
             },
-            "append_case": None,
+            "append_cases": {
+                "b.e21.B1850.f09_g17.CMIP6-piControl.001": None,
+                "b.e21.BHISTcmip6.f09_g17.LE2-1301.001": None,
+                "b.e21.B1850cmip6.f09_g17.CESM2-SF-EE.101": None,
+                "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.001": None,
+                "1p5K-SAI.001": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.001",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.001": "1p5K-SAI.001",
+                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.001": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.001",
+            },
             "ufunc": None,
         },
         "CESM2-LE_CMIP6": {
             "path": root_dir + "data/error_relativetobaseline/CESM2_LE_2000_2009_cmip6/",
             "subdirs": ["ARISE_SAI", "CESM2_1850control", "CESM2_LE", "CESM2_SF", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
             "subdir_cases": {
-                "ARISE_SAI": ["1p5K-SAI.001", "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.001"],
                 "CESM2_1850control": ["b.e21.B1850.f09_g17.CMIP6-piControl.001"],
                 "CESM2_LE": ["b.e21.BHISTcmip6.f09_g17.LE2-1301.001"],
                 "CESM2_SF": ["b.e21.B1850cmip6.f09_g17.CESM2-SF-EE.101"],
                 "CESM2_WACCM_SSP2-4.5": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.001"],
+                "ARISE_SAI": ["1p5K-SAI.001", "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.001"],
                 "CESM2_WACCM_SSP2-4.5_MCB": ["b.e21.BSSP245smbb.f09_g17.MCB-050PCT.001"],
             },
-            "append_case": None,
+            "append_cases": {
+                "b.e21.B1850.f09_g17.CMIP6-piControl.001": None,
+                "b.e21.BHISTcmip6.f09_g17.LE2-1301.001": None,
+                "b.e21.B1850cmip6.f09_g17.CESM2-SF-EE.101": None,
+                "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.001": None,
+                "1p5K-SAI.001": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.001",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.001": "1p5K-SAI.001",
+                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.001": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.001",
+            },
             "ufunc": None,
         },
         "CESM2-LE_SMBB": {
             "path": root_dir + "data/error_relativetobaseline/CESM2_LE_2000_2009_smbb/",
             "subdirs": ["ARISE_SAI", "CESM2_1850control", "CESM2_LE", "CESM2_SF", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
             "subdir_cases": {
-                "ARISE_SAI": ["1p5K-SAI.001", "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.001"],
                 "CESM2_1850control": ["b.e21.B1850.f09_g17.CMIP6-piControl.001"],
                 "CESM2_LE": ["b.e21.BHISTcmip6.f09_g17.LE2-1301.001"],
                 "CESM2_SF": ["b.e21.B1850cmip6.f09_g17.CESM2-SF-EE.101"],
                 "CESM2_WACCM_SSP2-4.5": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.001"],
+                "ARISE_SAI": ["1p5K-SAI.001", "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.001"],
                 "CESM2_WACCM_SSP2-4.5_MCB": ["b.e21.BSSP245smbb.f09_g17.MCB-050PCT.001"],
+            },
+            "append_cases": {
+                "b.e21.B1850.f09_g17.CMIP6-piControl.001": None,
+                "b.e21.BHISTcmip6.f09_g17.LE2-1301.001": None,
+                "b.e21.B1850cmip6.f09_g17.CESM2-SF-EE.101": None,
+                "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.001": None,
+                "1p5K-SAI.001": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.001",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.001": "1p5K-SAI.001",
+                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.001": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.001",
             },
             "append_case": None,
             "ufunc": None,
@@ -185,6 +213,7 @@ if __name__ == "__main__":
     # Load the data in a nested dictionary structure. The top level keys are the control case labels (e.g. "CESM2-LME", what is being used as the baseline for the error calculation). The second level keys are the simulations that are being tested against, and the third level keys are the specific case strings that are being used to identify the files for each simulation.
     data_dict = {}
     varlist = ['CLDTOT', 'FLNR', 'FLNS', 'FLNSC', 'FLNT', 'FLNTC', 'FLNTCLR', 'FLUT', 'FSNR', 'FSNS', 'FSNSC', 'FSNT', 'FSNTC', 'FSNTOA', 'FSNTOAC', 'LHFLX', 'SHFLX', 'TS', "PRECT", "PRECC", "PRECL", "PRECIP_THERMO"]
+    year_dim = "year"
     for case_label in CASE_CONFIGS.keys():
         datapath = CASE_CONFIGS[case_label]["path"]
         case_dict = {}
@@ -212,27 +241,44 @@ if __name__ == "__main__":
 
                 # If there is an append case specified, append the data from that case to the current dataset along the time dimension
                 # e.g. for ARISE-SAI, we want to append the CESM2-SSP2-4.5 data it is branched from. We will assume that the append case has already been loaded and is available in data_dict.
-                if CASE_CONFIGS[case_label]["append_case"] is not None:
-                    append_case_label = CASE_CONFIGS[case_label]["append_case"]
-                    if append_case_label not in data_dict:
-                        logging.warning(f"Append case {append_case_label} not found in data_dict for case {case_label}. Skipping append.")
+                if CASE_CONFIGS[case_label]["append_cases"][case_str] is not None:
+                    append_case_label = CASE_CONFIGS[case_label]["append_cases"][case_str]
+                    # Get the subdir for the append case, which may be different from the current subdir.
+                    append_subdir = None
+                    for subdir_key, case_list in CASE_CONFIGS[case_label]["subdir_cases"].items():
+                        if append_case_label in case_list:
+                            append_subdir = subdir_key
+                            break
+                    if append_subdir is None:
+                        logging.warning(f"Append case {append_case_label} not found in subdir_cases for case {case_label}. Skipping append.")
                     else:
-                        append_ds = data_dict[append_case_label].sel(time=slice(None, str(all_ds["time.year"][0].values - 1)))
-                        all_ds = xr.concat([append_ds, all_ds], dim="time")
+                        if append_subdir == subdir:
+                            append_ds = subcase_dict[append_case_label].sel({year_dim:slice(None, str(all_ds[year_dim][0].values - 1))})
+                        else:
+                            append_ds = case_dict[append_subdir][append_case_label].sel({year_dim:slice(None, str(all_ds[year_dim][0].values - 1))})
+                        all_ds = xr.concat([append_ds, all_ds], dim=year_dim)
 
                 if CASE_CONFIGS[case_label]["ufunc"] is not None:
                     all_ds = CASE_CONFIGS[case_label]["ufunc"](all_ds)
                 subcase_dict[case_str] = all_ds
             case_dict[subdir] = subcase_dict
         data_dict[case_label] = case_dict
+    
     # %%
     # Draft some plots to give opencode something to work with later.
     case_label = "CESM2_1850control"
     control_label = "CESM2_1850control"
     control_case = CASE_CONFIGS[case_label]["subdir_cases"][control_label][0]
-    subdirs = ["ARISE_SAI", "CESM2_1850control", "CESM2_LE", "CESM2_SF", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"]
-    subdirs = ["ARISE_SAI", "CESM2_LE", "CESM2_SF", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"]
+    subdirs = {
+        # "CESM2_1850control": "b.e21.B1850.f09_g17.CMIP6-piControl.001",
+        "CESM2_LE": "b.e21.BHISTcmip6.f09_g17.LE2-1301.001",
+        "CESM2_SF": "b.e21.B1850cmip6.f09_g17.CESM2-SF-EE.101",
+        "CESM2_WACCM_SSP2-4.5": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.001",
+        "ARISE_SAI": "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.001",
+        "CESM2_WACCM_SSP2-4.5_MCB": "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.001",
+    }
     test_var = "PRECIP_THERMO"
+    test_var = "FSNS"
     error_components = ["NMSE"] #, "U"]
     xlims = (1850, 2100)
     component_plot_args = {
@@ -263,7 +309,7 @@ if __name__ == "__main__":
             color="black", linestyle="-", alpha=0.3,
         )
     for subdir in subdirs:
-        case_str = CASE_CONFIGS[case_label]["subdir_cases"][subdir][0]
+        case_str = subdirs[subdir]
         ds = data_dict[case_label][subdir][case_str]
         data = ds[test_var]
         for component in error_components:
