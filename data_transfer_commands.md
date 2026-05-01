@@ -98,3 +98,18 @@ __CESM2 Single Forcing Ensemble examples:__
 find /gdex/data/d651055/CESM2-SF -wholename "*month_1/**b.e21.B1850cmip6.f09_g17.CESM2-SF-EE*.cam.h0.TS.*"
 
 ./job_scripts/gdex_file_transfer.sh "*month_1/**b.e21.B1850cmip6.f09_g17.CESM2-SF-EE*.cam.h0.TS.*" /gdex/data/d651055/CESM2-SF josh2250@login.rc.colorado.edu:/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_SF/d651055/CESM2-SF/
+
+__CESM2(WACCM) PiControl Simulations:__
+find /glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/b.e21.BW1850.f09_g17.CMIP6-piControl.001 -wholename "*atm/proc/tseries/month_1/b.e21.BW1850.f09_g17.CMIP6-piControl.001.cam.h0.TS.*.nc"
+
+./job_scripts/gdex_file_transfer.sh "*atm/proc/tseries/month_1/b.e21.BW1850.f09_g17.CMIP6-piControl.001.cam.h0.TS.*.nc" /glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/b.e21.BW1850.f09_g17.CMIP6-piControl.001 josh2250@login.rc.colorado.edu:/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_WACCM_1850control/
+
+/glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/b.e21.BW1850.f09_g17.CMIP6-piControl.001
+
+__CESM2(WACCM) Historical Simulations:__
+
+*This works, but using wildcards in the transfer is not working.*
+find /glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00? -wholename "*month_1/**b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM*.TS.*"
+
+*One at a time transferring (need to update the ensemble index):*
+./job_scripts/gdex_file_transfer.sh "*month_1/**b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM*.TS.*" /glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001 josh2250@login.rc.colorado.edu:/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_WACCM_HIST/

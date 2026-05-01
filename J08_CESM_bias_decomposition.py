@@ -671,10 +671,13 @@ if __name__ == "__main__":
         )
         ax.set_ylabel(f"{var} Error")
         ax.legend().remove()
+    ax.legend(loc=[1.25, 0.35])
+    # Remove the last subplot
+    fig.delaxes(axs[-1])
 
-    fig.savefig("figures/figure3_draft.png", dpi=300, bbox_inches='tight')
-    logging.info("Saved figure3_draft.png")
-    plt.close(fig)
+    # fig.savefig("figures/figure3_draft.png", dpi=300, bbox_inches='tight')
+    # logging.info("Saved figure3_draft.png")
+    # plt.close(fig)
 # %%
 # Another example plot
 # test_data = data_dict['CESM2_1850control']["CESM2_WACCM_SSP2-4.5"]['b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?']
