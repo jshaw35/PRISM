@@ -80,6 +80,12 @@ if __name__ == "__main__":
     curc_cesm2_sf_datapath = "/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_SF/"
     curc_cesm2_sf_outpath = "/home/josh2250/projects/PRISM/data/RadInt_procdata/CESM2_SF/"
 
+    curc_cesm2_waccm_control_datapath = "/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_WACCM_1850control/"
+    curc_cesm2_waccm_control_outpath = "/home/josh2250/projects/PRISM/data/RadInt_procdata/CESM2_WACCM_1850control/"
+
+    curc_cesm2_waccm_hist_datapath = "/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_WACCM_HIST/"
+    curc_cesm2_waccm_hist_outpath = "/home/josh2250/projects/PRISM/data/RadInt_procdata/CESM2_WACCM_HIST/"
+
     crawl_and_process(curc_lme_datapath, curc_lme_outpath, average_spatially)
     crawl_and_process(curc_cesm2_245_datapath, curc_cesm2_245_outpath, average_spatially)
     crawl_and_process(curc_ariseSAI_datapath, curc_ariseSAI_outpath, average_spatially)
@@ -88,4 +94,6 @@ if __name__ == "__main__":
     crawl_and_process(curc_cesm2_mcb_datapath, curc_cesm2_mcb_outpath, average_spatially)
     crawl_and_process(curc_cesm2_1850control_datapath, curc_cesm2_1850control_outpath, average_spatially)
     crawl_and_process(curc_cesm2_sf_datapath, curc_cesm2_sf_outpath, average_spatially)
+    crawl_and_process(curc_cesm2_waccm_control_datapath, curc_cesm2_waccm_control_outpath, average_spatially)
+    crawl_and_process(curc_cesm2_waccm_hist_datapath, curc_cesm2_waccm_hist_outpath, average_spatially)
 
