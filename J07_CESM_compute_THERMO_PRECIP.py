@@ -62,9 +62,9 @@ def crawl_and_process2(input_dir, output_dir, process_fn, **fn_args):
             src = os.path.join(root, name)
             if output_dir is not None:
                 dst = os.path.join(out_root, name)
-            if os.path.exists(dst):
-                logging.info(f"{dst} already exists")
-                continue
+                if os.path.exists(dst):
+                    logging.info(f"{dst} already exists")
+                    continue
             logging.info(f"Processing {src}")
             data = process_fn(src, **fn_args)
             if data is None:
@@ -126,6 +126,8 @@ if __name__ == "__main__":
         "CESM2_WACCM_SSP2-4.5",
         "CESM2_WACCM_SSP2-4.5_MCB",
         "CESM_LME",
+        "CESM2_WACCM_1850control",
+        "CESM2_WACCM_HIST",
     ]
 
     for case in case_list:

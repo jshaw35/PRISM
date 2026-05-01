@@ -73,6 +73,36 @@ def crawl_and_process(input_dir, output_dir, process_fn):
             data.to_netcdf(dst)
 
 
+def shift_noleap_time_back_one_month(time_values):
+    t = np.asarray(time_values)
+    n = t.size
+
+    years = np.fromiter((v.year for v in t), dtype=np.int32, count=n)
+    months = np.fromiter((v.month for v in t), dtype=np.int16, count=n)
+    days = np.fromiter((v.day for v in t), dtype=np.int16, count=n)
+    hours = np.fromiter((v.hour for v in t), dtype=np.int16, count=n)
+    minutes = np.fromiter((v.minute for v in t), dtype=np.int16, count=n)
+    seconds = np.fromiter((v.second for v in t), dtype=np.int16, count=n)
+    microseconds = np.fromiter((v.microsecond for v in t), dtype=np.int32, count=n)
+
+    months = months - 1
+    jan_mask = months == 0
+    months[jan_mask] = 12
+    years[jan_mask] = years[jan_mask] - 1
+
+    days_in_month = np.array([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31], dtype=np.int16)
+    days = np.minimum(days, days_in_month[months - 1])
+
+    dt_type = type(t[0])
+    return np.array(
+        [
+            dt_type(int(y), int(m), int(d), int(h), int(mi), int(s), int(us))
+            for y, m, d, h, mi, s, us in zip(years, months, days, hours, minutes, seconds, microseconds)
+        ],
+        dtype=object,
+    )
+
+
 def compute_background_state(
     rawdata_root,
     save_path,
@@ -107,6 +137,12 @@ def compute_background_state(
         print(i)
         trying_files = [precip_files[_var][i] for _var in precip_vars]
         ds_merged = xr.open_mfdataset(trying_files, combine="by_coords", preprocess=lambda x: x.drop_vars(["time_written", "date_written"]))[precip_vars]
+
+        # Handle the CESM time coordinate issue and challenges with cftime.DatetimeNoLeap
+        if ds_merged["time"][0]["time.month"] == 2:
+            ds_merged = ds_merged.assign_coords(
+                time=shift_noleap_time_back_one_month(ds_merged["time"].values)
+            )
         # Get the time length and add it to weight the average by the number of time steps in each file later
         time_len = ds_merged.sizes["time"]
         if tslice is not None:
@@ -163,15 +199,14 @@ if __name__ == "__main__":
     save_path = Path("/home/josh2250/projects/PRISM/data/control_baselines/")
 
     case_dict = {
-        "CESM2_LME_control": ["b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008","CESM2_LME/d651078/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008/atm/proc/tseries/month_1/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008.cam.h0.*"],
-        # "CESM2_LME": ["b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002", "CESM2_LME/d651078/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002/atm/proc/tseries/month_1/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002.cam.h0.*"],
-        "CESM2_1850control": ["b.e21.B1850.f09_g17.CMIP6-piControl.001", "CESM2_1850control/b.e21.B1850.f09_g17.CMIP6-piControl.001/atm/proc/tseries/month_1/b.e21.B1850.f09_g17.CMIP6-piControl.001.cam.h0.*.1?????-??????.nc"],
-        "CESM2_LE_2000_2009_cmip6": ["b.e21.BHISTcmip6.f09_g17.LE2-1301.00?", "CESM2_LE/d651056/CESM2-LE/atm/proc/tseries/month_1/*/b.e21.BHISTcmip6.f09_g17.LE2-1301.00?.cam.h0.*.200001-200912.nc"],
-        "CESM2_LE_2000_2009_smbb": ["b.e21.BHISTsmbb.f09_g17.LE2-*.00?", "CESM2_LE/d651056/CESM2-LE/atm/proc/tseries/month_1/*/b.e21.BHISTsmbb.f09_g17.LE2-*.00?.cam.h0.*.200001-200912.nc"],
+        "CESM2_LME_control": ["b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008","CESM2_LME/d651078/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008/atm/proc/tseries/month_1/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008.cam.h0.*", None],
+        "CESM2_1850control": ["b.e21.B1850.f09_g17.CMIP6-piControl.001", "CESM2_1850control/b.e21.B1850.f09_g17.CMIP6-piControl.001/atm/proc/tseries/month_1/b.e21.B1850.f09_g17.CMIP6-piControl.001.cam.h0.*.1?????-??????.nc", None],
+        "CESM2_LE_2000_2009_cmip6": ["b.e21.BHISTcmip6.f09_g17.LE2-1301.00?", "CESM2_LE/d651056/CESM2-LE/atm/proc/tseries/month_1/*/b.e21.BHISTcmip6.f09_g17.LE2-1301.00?.cam.h0.*.200001-200912.nc", None],
+        "CESM2_WACCM_HIST_1850_1864": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?", "CESM2_WACCM_HIST/atm/proc/tseries/month_1/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?.cam.h0.*.nc", slice("1850", "1864")],
+        "CESM2_WACCM_HIST_2000_2014": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?", "CESM2_WACCM_HIST/atm/proc/tseries/month_1/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?.cam.h0.*.nc", slice("2000", "2014")],
+        "CESM2_WACCM_1850control": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001.cam.h0*", "CESM2_WACCM_1850control/atm/proc/tseries/month_1/b.e21.BW1850.f09_g17.CMIP6-piControl.001.cam.h0.*.nc", slice("0100", None)],
     }
 
-# ~/kaydata/jshaw/RadInt_rawdata/CESM2_LE/d651056/CESM2-LE/atm/proc/tseries/month_1/*/b.e21.BHISTcmip6.f09_g17.LE2-1301.00?.cam.h0.*.200001-200912.nc
-# ~/kaydata/jshaw/RadInt_rawdata/CESM2_LE/d651056/CESM2-LE/atm/proc/tseries/month_1/*/b.e21.BHISTsmbb.f09_g17.LE2-*.00?.cam.h0.*.200001-200912.nc
     # If on glade
     # rawdata_root = Path("/gdex/data/")
     # save_path = Path("/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/data/control_baselines/")
@@ -184,12 +219,12 @@ if __name__ == "__main__":
 
     for case, pattern in case_dict.items():
         logging.info("Processing: %s, pattern: %s" % (case, pattern[0]))
-        # ds_merged, precip_ds = compute_background_state(
         test_out = compute_background_state(
             rawdata_root,
             save_path,
             case,
             pattern,
+            tslice=pattern[2],
         )
         # break
 

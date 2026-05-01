@@ -70,6 +70,20 @@ else
     echo "${FILE} already exists"
 fi
 
+FILE=../zipped_data/CESM2_WACCM_1850control.zip
+if [ ! -e ${FILE} ]; then 
+    zip -r ${FILE} RadInt_procdata/CESM2_WACCM_1850control
+else
+    echo "${FILE} already exists"
+fi
+
+FILE=../zipped_data/CESM2_WACCM_HIST.zip
+if [ ! -e ${FILE} ]; then 
+    zip -r ${FILE} RadInt_procdata/CESM2_WACCM_HIST
+else
+    echo "${FILE} already exists"
+fi
+
 # Baseline fields
 FILE=../zipped_data/control_baselines.zip
 if [ ! -e ${FILE} ]; then 
@@ -103,6 +117,27 @@ fi
 FILE=../zipped_data/CESM2_LME_control_error_components.zip
 if [ ! -e ${FILE} ]; then 
     zip -r ${FILE} error_relativetobaseline/CESM2_LME_control
+else
+    echo "${FILE} already exists"
+fi
+
+FILE=../zipped_data/CESM2_WACCM_1850control_error_components.zip
+if [ ! -e ${FILE} ]; then 
+    zip -r ${FILE} error_relativetobaseline/CESM2_WACCM_1850control
+else
+    echo "${FILE} already exists"
+fi
+
+FILE=../zipped_data/CESM2_WACCM_HIST_1850_1864_error_components.zip
+if [ ! -e ${FILE} ]; then 
+    zip -r ${FILE} error_relativetobaseline/CESM2_WACCM_HIST_1850_1864
+else
+    echo "${FILE} already exists"
+fi
+
+FILE=../zipped_data/CESM2_WACCM_HIST_2000_2014_error_components.zip
+if [ ! -e ${FILE} ]; then 
+    zip -r ${FILE} error_relativetobaseline/CESM2_WACCM_HIST_2000_2014
 else
     echo "${FILE} already exists"
 fi
