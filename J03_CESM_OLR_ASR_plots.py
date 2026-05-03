@@ -161,18 +161,23 @@ if __name__ == "__main__":
             "append_case": None,
             "ufunc": None,
         },
-        "CESM2-LE": {
-            "path": "data/RadInt_procdata/CESM2_LE/",
-            "case_str": "b.e21.BHISTcmip6.f09_g17.LE2-1301.001",
+        # "CESM2-LE": {
+        #     "path": "data/RadInt_procdata/CESM2_LE/",
+        #     "case_str": "b.e21.BHISTcmip6.f09_g17.LE2-1301.001",
+        #     "append_case": None,
+        #     "ufunc": None,
+        # },
+        "CESM2-WACCM-HIST": {
+            "path": "data/RadInt_procdata/CESM2_WACCM_HIST/",
+            "case_str": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001",
             "append_case": None,
             "ufunc": None,
         },
         "CESM2-SSP2-4.5": {
             "path": "data/RadInt_procdata/CESM2_WACCM_SSP2-4.5/",
             "case_str": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.001",
-            "append_case": "CESM2-LE",
+            "append_case": "CESM2-WACCM-HIST",
             "ufunc": None,
-            # "ufunc": lambda ds: ds.sel(time=slice(None, "2084-12-31")),
         },
         "ARISE-SAI": {
             "path": "data/RadInt_procdata/ARISE_SAI/",
@@ -250,7 +255,13 @@ if __name__ == "__main__":
             "cbar_ticks": np.arange(850, 1851, 100),
             "cbar_ylabel": None,
         },
-        "CESM2-LE": {
+        # "CESM2-LE": {
+        #     "ylims": (230, 237),
+        #     "xlims": (230, 237),
+        #     "cbar_ticks": np.arange(1850, 2016, 10),
+        #     "cbar_ylabel": None,
+        # },
+        "CESM2-WACCM-HIST": {
             "ylims": (230, 237),
             "xlims": (230, 237),
             "cbar_ticks": np.arange(1850, 2016, 10),
