@@ -300,98 +300,386 @@ def compute_decadal(
         ds_decadal["year"] = ds_decadal["year"] + 5
     return ds_decadal
 
+
+def extract_ensemble_numbers(filenames):
+    """
+    Extract ensemble numbers from CESM filenames.
     
+    Ensemble numbers are 3-digit numeric strings bounded by periods (e.g., ".001.").
+    This function parses each filename to identify the ensemble member.
+    
+    Args:
+        filenames (List[str]): List of file paths
+    
+    Returns:
+        Dict[str, List[str]]: Dictionary mapping ensemble number strings to lists of files.
+                             Keys are ensemble numbers (e.g., "001", "002", "101").
+                             Values are lists of file paths containing that ensemble number.
+    """
+    ens_dict = {}
+    
+    for filepath in filenames:
+        # Extract just the filename from the path
+        filename = os.path.basename(filepath)
+        
+        # Split by period to find 3-digit numeric strings
+        parts = filename.split(".")
+        ens_number = None
+        
+        for part in parts:
+            if len(part) == 3 and part.isdigit():
+                ens_number = part
+                break
+        
+        if ens_number is not None:
+            if ens_number not in ens_dict:
+                ens_dict[ens_number] = []
+            ens_dict[ens_number].append(filepath)
+        else:
+            logging.warning(f"Could not extract ensemble number from filename: {filename}")
+    
+    return ens_dict
+
+
+def get_ensemble_number_from_case_str(case_str):
+    """
+    Extract ensemble number from a case string (e.g., "b.e21.BHISTcmip6.f09_g17.LE2-1301.001" -> "001").
+    
+    Args:
+        case_str (str): Case string identifier
+    
+    Returns:
+        str: Ensemble number if found (3-digit numeric string), None otherwise
+    """
+    parts = case_str.split(".")
+    for part in parts:
+        if len(part) == 3 and part.isdigit():
+            return part
+    return None
+
+
+def match_wildcard_case(pattern, case_list):
+    """
+    Find all cases in case_list that match the wildcard pattern.
+    
+    Simple wildcard matching: * matches any sequence of characters, ? matches single character.
+    
+    Args:
+        pattern (str): Pattern string with optional * or ? wildcards (e.g., "case.name.*")
+        case_list (List[str]): List of case strings to search
+    
+    Returns:
+        List[str]: List of matching case strings from case_list
+    """
+    import fnmatch
+    matches = [case for case in case_list if fnmatch.fnmatch(case, pattern)]
+    return matches
+
+
+def load_ensemble_cases(datapath_subdir, case_str, varlist):
+    """
+    Load case data with support for wildcard patterns matching multiple ensemble members.
+    
+    If case_str contains wildcards (* or ?):
+    - Finds all matching files
+    - Groups files by ensemble member (identified by 3-digit numeric strings in filenames)
+    - Loads each ensemble separately to avoid conflicts
+    - Adds 'ens' coordinate to track ensemble membership
+    - Concatenates along new 'ens' dimension
+    
+    If case_str contains no wildcards:
+    - Uses original behavior: finds all files matching the exact pattern
+    - Returns single dataset as before
+    
+    Args:
+        datapath_subdir (str): Path to subdirectory containing case files
+        case_str (str): Case string, may contain wildcards (* or ?)
+        varlist (List[str]): List of variable names to search for
+    
+    Returns:
+        xarray.Dataset: Loaded dataset. If wildcards were used, includes new 'ens' dimension.
+                       Returns None if no files are found.
+    """
+    has_wildcard = "*" in case_str or "?" in case_str
+    
+    if not has_wildcard:
+        # Original behavior: no wildcards, use standard file finding
+        all_files = []
+        for var in varlist:
+            var_files = crawl_and_list_glob(datapath_subdir, f"**/*{case_str}*.{var}.*nc")
+            all_files.extend(var_files)
+        all_files.sort()
+
+        if len(all_files) == 0:
+            return None
+        
+        all_ds = xr.open_mfdataset(all_files)
+        return all_ds
+    
+    else:
+        # Wildcard case: find matching files, group by ensemble, load separately
+        all_files = []
+        for var in varlist:
+            # Use case_str directly in glob pattern (it contains wildcards)
+            var_files = crawl_and_list_glob(datapath_subdir, f"**/*{case_str}*.{var}.*nc")
+            all_files.extend(var_files)
+        
+        if len(all_files) == 0:
+            logging.warning(f"No files found matching pattern: **/*{case_str}*.*.nc")
+            return None
+        
+        # Extract ensemble numbers and group files
+        all_files.sort()
+        ens_dict = extract_ensemble_numbers(all_files)
+        
+        if len(ens_dict) == 0:
+            logging.warning(f"No ensemble numbers could be extracted from matching files for pattern: {case_str}")
+            return None
+        
+        # Sort ensemble numbers for consistent ordering
+        sorted_ens_numbers = sorted(ens_dict.keys())
+        
+        # Load each ensemble member separately
+        ensemble_datasets = []
+        for ens_number in sorted_ens_numbers:
+            ens_files = ens_dict[ens_number]
+            
+            try:
+                # Load this ensemble's files with flexible coordinate handling
+                ens_ds = xr.open_mfdataset(
+                    ens_files,
+                    combine='by_coords',
+                    compat='no_conflicts'
+                )
+                
+                # Add ensemble number as a data variable first, then expand the dimension
+                ens_ds = ens_ds.expand_dims({'ens': [ens_number]})
+                ensemble_datasets.append(ens_ds)
+                
+                logging.info(f"Loaded ensemble {ens_number} with {len(ens_files)} files")
+            
+            except Exception as e:
+                logging.error(f"Error loading ensemble {ens_number}: {e}")
+                continue
+        
+        if len(ensemble_datasets) == 0:
+            logging.warning(f"No ensemble members could be loaded for pattern: {case_str}")
+            return None
+        
+        # Concatenate all ensembles along the 'ens' dimension
+        combined_ds = xr.concat(ensemble_datasets, dim='ens')
+
+        return combined_ds
+
+
 # %%
 
 if __name__ == "__main__":
+    root_dir = "/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/"
     CASE_CONFIGS = {
-        "CESM-LME": {
-            "path": "data/RadInt_procdata/CESM_LME/",
-            "case_str": "BLMTRC5CN.f19_g16.003",
-            "append_case": None,
-            "ufunc": lambda ds: ds.sel(time=slice(None, "1849-12-31")),
-            # "ufunc": None,
-        },
-        "CESM2-LME": {
-            "path": "data/RadInt_procdata/CESM2_LME/",
-            "case_str": "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002",
-            "append_case": None,
+        "CESM_LME":{
+            "path": root_dir + "data/RadInt_procdata/CESM_LME/",
+            "subdir_cases": ["b.e11.BLMTRC5CN.f19_g16.00?"],
+            "append_cases": {
+                "b.e11.BLMTRC5CN.f19_g16.00?": None,
+            },
             "ufunc": None,
         },
-        "CESM2-LE": {
-            "path": "data/RadInt_procdata/CESM2_LE/",
-            "case_str": "b.e21.BHISTcmip6.f09_g17.LE2-1301.001",
-            "append_case": None,
+        "CESM2_LME": {
+            "path": root_dir + "data/RadInt_procdata/CESM2_LME/",
+            "subdir_cases": ["b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008", "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002"],
+            "append_cases": {
+                "b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008": None,
+                "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002": None,
+            },
             "ufunc": None,
         },
-        "CESM2-SSP2-4.5": {
-            "path": "data/RadInt_procdata/CESM2_WACCM_SSP2-4.5/",
-            "case_str": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.001",
-            "append_case": "CESM2-LE",
+        "CESM2_WACCM_1850control" :{
+            "path": root_dir + "data/RadInt_procdata/CESM2_WACCM_1850control/",
+            "subdir_cases": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"],
+            "append_cases": {
+                "b.e21.BW1850.f09_g17.CMIP6-piControl.001": None,
+            },
             "ufunc": None,
-            # "ufunc": lambda ds: ds.sel(time=slice(None, "2084-12-31")),
+        },
+        "CESM2_WACCM_HIST": {
+            "path": root_dir + "data/RadInt_procdata/CESM2_WACCM_HIST/",
+            "subdir_cases": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?", "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001"],
+            "append_cases": {
+                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?": None,
+                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001": None,
+            },
+            "ufunc": None,
+        },
+        "CESM2_WACCM_SSP2-4.5": {
+            "path": root_dir + "data/RadInt_procdata/CESM2_WACCM_SSP2-4.5/",
+            "subdir_cases": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??"],
+            "append_cases": {
+                "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001",
+            },
+            "ufunc": None,
         },
         "ARISE-SAI": {
-            "path": "data/RadInt_procdata/ARISE_SAI/",
-            "case_str": "1p5K-SAI.001",
-            "append_case": "CESM2-SSP2-4.5",
+            "path": root_dir + "data/RadInt_procdata/ARISE_SAI/",
+            "subdir_cases": ["1p5K-SAI.00?", "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?", "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?"],
+            "append_cases": {
+                "1p5K-SAI.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?": "1p5K-SAI.00?",
+            },
             "ufunc": None,
         },
-        "ARISE-SAI_extended": {
-            "path": "data/RadInt_procdata/ARISE_SAI/",
-            "case_str": "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.001",
-            "append_case": "ARISE-SAI",
+        "CESM2_WACCM_SSP2-4.5_MCB": {
+            "path": root_dir + "data/RadInt_procdata/CESM2_WACCM_SSP2-4.5_MCB/",
+            "subdir_cases": ["b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?", "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000"],
+            "append_cases": {
+                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+            },
             "ufunc": None,
         },
-        "CESM2-SSP2-4.5_MCB": {
-            "path": "data/RadInt_procdata/CESM2_WACCM_SSP2-4.5_MCB/",
-            "case_str": "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.001",
-            "append_case": "CESM2-SSP2-4.5",
-            "ufunc": None,
-        },
-        # Add new cases here when ready
     }
-    asr_var = "FSNT"
-    olr_var = "FLNT"
-    ts_var = "TS"
-
-    load_var_list = [asr_var, olr_var, ts_var]
+    # %%
+    # Load the data in a nested dictionary structure. The top level keys are the control case labels (e.g. "CESM2-LME", what is being used as the baseline for the error calculation). The second level keys are the simulations that are being tested against, and the third level keys are the specific case strings that are being used to identify the files for each simulation.
     data_dict = {}
-
+    varlist = ['CLDTOT', 'FLNR', 'FLNS', 'FLNSC', 'FLNT', 'FLNTC', 'FLNTCLR', 'FLUT', 'FSNR', 'FSNS', 'FSNSC', 'FSNT', 'FSNTC', 'FSNTOA', 'FSNTOAC', 'LHFLX', 'SHFLX', 'TS', "PRECT", "PRECC", "PRECL", "PRECIP_THERMO"]
+    year_dim = "time"
     for case_label in CASE_CONFIGS.keys():
+        logging.info(f"Loading data for case: {case_label}")
         datapath = CASE_CONFIGS[case_label]["path"]
-        case_str = CASE_CONFIGS[case_label]["case_str"]
+        case_dict = {}
+        for case_str in CASE_CONFIGS[case_label]["subdir_cases"]:
+            logging.info(f"Loading data for subcase: {case_str}")
 
-        all_files = []
-        for var in load_var_list:
-            var_files = crawl_and_list_glob(datapath, f"**/*{case_str}*.{var}.*nc")
-            all_files.extend(var_files)
-        if len(all_files) == 0:
-            logging.warning(f"No files found for case {case_label} with case string {case_str} in path {datapath}")
-            continue
-        
-        all_ds = xr.open_mfdataset(all_files)
+            # Load case data, supporting wildcards for ensemble members
+            all_ds = load_ensemble_cases(datapath, case_str, varlist)
+            if all_ds is None:
+                logging.warning(f"No files found for case {case_label} with case string {case_str} in path {datapath}")
+                continue
 
-        # Handle the CESM time coordinate issue and challenges with cftime.DatetimeNoLeap
-        if all_ds["time"][0]["time.month"] == 2:
-            all_ds = all_ds.assign_coords(
-                time=shift_noleap_time_back_one_month(all_ds["time"].values)
-            )
+            # Handle the CESM time coordinate issue and challenges with cftime.DatetimeNoLeap
+            if "time" in all_ds.coords:
+                if all_ds["time"][0]["time.month"] == 2:
+                    all_ds = all_ds.assign_coords(
+                        time=shift_noleap_time_back_one_month(all_ds["time"].values)
+                    )
 
-        # If there is an append case specified, append the data from that case to the current dataset along the time dimension
-        # e.g. for ARISE-SAI, we want to append the CESM2-SSP2-4.5 data it is branched from. We will assume that the append case has already been loaded and is available in data_dict.
-        if CASE_CONFIGS[case_label]["append_case"] is not None:
-            append_case_label = CASE_CONFIGS[case_label]["append_case"]
-            if append_case_label not in data_dict:
-                logging.warning(f"Append case {append_case_label} not found in data_dict for case {case_label}. Skipping append.")
-            else:
-                append_ds = data_dict[append_case_label].sel(time=slice(None, str(all_ds["time.year"][0].values - 1)))
-                all_ds = xr.concat([append_ds, all_ds], dim="time")
+            # If there is an append case specified, append the data from that case to the current dataset along the time dimension
+            # e.g. for ARISE-SAI, we want to append the CESM2-SSP2-4.5 data it is branched from. We will assume that the append case has already been loaded and is available in data_dict.
+            if CASE_CONFIGS[case_label]["append_cases"][case_str] is not None:
+                append_case_label = CASE_CONFIGS[case_label]["append_cases"][case_str]
 
-        if CASE_CONFIGS[case_label]["ufunc"] is not None:
-            all_ds = CASE_CONFIGS[case_label]["ufunc"](all_ds)
+                # Get the subdir for the append case, which may be different from the current subdir.
+                # Handle both explicit case strings and wildcard patterns
+                append_subdir = None
+                append_case_to_use = None
+                append_candidate = None
 
-        data_dict[case_label] = all_ds
+                has_wildcard = "*" in append_case_label or "?" in append_case_label
+                # First check the current subdir since data_dict will not be updated with all cases until the end of the loop.
+                if append_case_label in case_dict.keys():
+                    append_candidate = case_dict.get(append_case_label)
+                # Check if the append case label matches any cases in any of the subdirs for other cases.
+                else:
+                    for match_case in CASE_CONFIGS:
+                        subdir_cases = CASE_CONFIGS[match_case]["subdir_cases"]
+                        if has_wildcard:
+                            # Try wildcard matching
+                            matches = match_wildcard_case(append_case_label, subdir_cases)
+                            if len(matches) > 0:
+                                if len(matches) > 1:
+                                    logging.warning(f"Append case pattern '{append_case_label}' matched multiple cases: {matches}. Using first match: {matches[0]}")
+                                append_case_to_use = matches[0]
+                                append_subdir = match_case
+                                break
+                        else:
+                            # Exact match for non-wildcard case
+                            if append_case_label in subdir_cases:
+                                append_case_to_use = append_case_label
+                                append_subdir = match_case
+                                break
+                if (append_subdir is None) and (append_candidate is None):
+                    logging.warning(f"Append case {append_case_label} not found in subdir_cases for case {case_label}. Skipping append.")
+                else:
+                    if append_candidate is not None:
+                        pass  # append_candidate was already found in the current case_dict, no need to search further
+                    # Handle ensemble dimension in append case
+                    elif append_subdir == case_str:
+                        append_candidate = data_dict.get(append_subdir)
+                    else:
+                        append_candidate = data_dict.get(append_subdir, {}).get(append_case_to_use)
+                    
+                    if append_candidate is None:
+                        logging.warning(f"Append case {append_case_label} not found in loaded data for case {case_label}. Skipping append.")
+                        logging.warning(f"append_case_to_use: {append_case_to_use}")
+                        logging.warning(f"append_subdir: {append_subdir}")
+                        # Break the loop for testing purposes to avoid errors downstream
+                    else:
+                        # Extract ensemble number from current case if it has an ens dimension
+                        if "ens" in all_ds.dims:
+                            all_ds_ens_vals = all_ds["ens"].values
+                            if "ens" in append_candidate.dims:
+                                append_candidate_ens_vals = append_candidate["ens"].values
+                                append_candidate_ens_vals_first = append_candidate_ens_vals[0]
+                                match = [i in append_candidate_ens_vals for i in all_ds_ens_vals]
+                                match_ens = [val if val in append_candidate_ens_vals else append_candidate_ens_vals_first for val in all_ds_ens_vals]
+                                appended_list = []
+                                for ens, match_bool in zip(all_ds_ens_vals, match):
+                                    if "ens" not in append_candidate.indexes:
+                                        append_candidate = append_candidate.set_index(ens="ens")
+                                    if match_bool:
+                                        append_ds_ens = append_candidate.sel(ens=ens, drop=False)
+                                        logging.info(f"Appending ensemble {ens} from {append_case_label}")
+                                    else:
+                                        append_ds_ens = append_candidate.sel(ens=append_candidate_ens_vals_first, drop=False)
+                                        logging.warning(f"Ensemble {ens} not found in append case {append_case_label}. Using first available ensemble {append_candidate_ens_vals_first}.")
+                                    appended_list.append(append_ds_ens)
+                                append_ds = xr.concat(appended_list, dim="ens")
+                            else:
+                                # No ens dimension in append candidate, use as-is
+                                append_ds = append_candidate
+                        else:
+                            # Current case has no ensemble dimension
+                            if "ens" in append_candidate.dims:
+                                # Append candidate has ensembles, use first but keep as dimension
+                                first_ens = append_candidate["ens"].values[0]
+                                append_ds = append_candidate.isel(ens=0, drop=False)
+                                logging.info(f"Current case has no ensemble dimension. Using first ensemble {first_ens} from append case.")
+                            else:
+                                # Neither has ensembles
+                                append_ds = append_candidate
+                        
+                        # Perform the append operation with time dimension selection
+                        # Check if cftime.DatetimeNoLeap is being used and select time accordingly
+                        if isinstance(append_ds["time"][0].dtype, object):
+                            # Likely cftime objects, select using cftime-compatible method
+                            append_ds_subset = append_ds.sel({year_dim:slice(None, str(all_ds[year_dim][0].dt.year.values - 1))})
+                        elif isinstance(all_ds["time"].values[0], np.datetime64) or isinstance(all_ds["time"].values[0], pd.Timestamp):
+                            append_ds_subset = append_ds.sel({year_dim:slice(None, str(all_ds[year_dim][0].values - 1))})                        
+                        else:
+                            append_ds_subset = append_ds.sel({year_dim:slice(None, str(all_ds[year_dim][0].values - 1))})
+                        
+                        # Ensure ensemble dimension consistency before concatenation
+                        # If one dataset has ens as an indexed dimension and the other doesn't, 
+                        # reset the index to avoid xarray concat errors
+                        if "ens" in all_ds.indexes and "ens" not in append_ds_subset.indexes:
+                            # all_ds has indexed ens, append_ds_subset doesn't - reset all_ds ens index
+                            all_ds = all_ds.reset_index("ens", drop=False)
+                        elif "ens" not in all_ds.indexes and "ens" in append_ds_subset.indexes:
+                            # append_ds_subset has indexed ens, all_ds doesn't - reset append_ds_subset ens index
+                            append_ds_subset = append_ds_subset.reset_index("ens", drop=False)
+                        
+                        all_ds = xr.concat([append_ds_subset, all_ds], dim=year_dim)
+
+            if CASE_CONFIGS[case_label]["ufunc"] is not None:
+                all_ds = CASE_CONFIGS[case_label]["ufunc"](all_ds)
+            case_dict[case_str] = all_ds
+        data_dict[case_label] = case_dict
+    
 
     # %%
     PLOT_CONFIGS1 = {
