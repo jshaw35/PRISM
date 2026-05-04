@@ -683,7 +683,8 @@ if __name__ == "__main__":
 
     # %%
     PLOT_CONFIGS1 = {
-        "CESM-LME": {
+        "CESM_LME": {
+            "selfunc": lambda ds: ds['b.e11.BLMTRC5CN.f19_g16.00?'].sel(ens="002"),
             # "ax1_lims": (228, 237),
             # "ax2_lims": (-3, 6),
             "ax1_lims": (230, 240),
@@ -697,7 +698,8 @@ if __name__ == "__main__":
             "keep_left_axes": True,
             "keep_right_axes": True,
         },
-        "CESM2-LME": {
+        "CESM2_LME": {
+            "selfunc": lambda ds: ds['b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002'],
             # "ax1_lims": (235, 244),
             # "ax2_lims": (-3, 6),
             "ax1_lims": (237, 247),
@@ -721,16 +723,19 @@ if __name__ == "__main__":
     fig, axes = plt.subplots(2, 2, figsize=(15, 10))
     fig.subplots_adjust(wspace=0.40)
     
-    case_list_1 = ["CESM-LME", "CESM2-LME"]
+    case_list_1 = ["CESM_LME", "CESM2_LME"]
     start_year_1 = 850
+    ts_var = "TS"
+    olr_var = "FLNT"
+    asr_var = "FSNT"
 
     for ax, axb, case_label in zip(axes[0], axes[1], case_list_1):
         logging.info(f"Plotting case: {case_label}")
-        
         # Extract ASR and OLR data
-        asr_ds = data_dict[case_label][asr_var].sel(spatial="G")
-        olr_ds = data_dict[case_label][olr_var].sel(spatial="G")
-        ts_ds = data_dict[case_label][ts_var].sel(spatial="G")
+        selfunc = PLOT_CONFIGS[case_label].get("selfunc")
+        asr_ds = selfunc(data_dict[case_label])[asr_var].sel(spatial="G")
+        olr_ds = selfunc(data_dict[case_label])[olr_var].sel(spatial="G")
+        ts_ds = selfunc(data_dict[case_label])[ts_var].sel(spatial="G")
         
         # Compute annual means
         asr_annual = asr_ds.groupby("time.year").mean()
@@ -798,9 +803,11 @@ if __name__ == "__main__":
     fig.savefig("figures/figure2b_toprow.png", dpi=300, bbox_inches='tight')
     logging.info("Saved figure2b_toprow.png")
     plt.close(fig)
+
     # %%
     PLOT_CONFIGS2 = {
-        "CESM2-SSP2-4.5": {
+        'CESM2_WACCM_SSP2-4.5': {
+            "selfunc": lambda ds: ds['b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??'].set_index(ens="ens").sel(ens="001"),
             "ax1_lims": (236, 244),
             "ax2_lims": (-5, 3),
             # "axb1_lims": (0.0e24, 2.5e24),
@@ -811,6 +818,8 @@ if __name__ == "__main__":
             "keep_right_axes": False,
         },
         "ARISE-SAI": {
+            "selfunc": lambda ds: ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?'].set_index(ens="ens").sel(ens="001"),
+            # "selfunc": lambda ds: ds['b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?'].set_index(ens="ens").sel(ens="001"),
             "ax1_lims": (236, 244),
             "ax2_lims": (-5, 3),
             # "axb1_lims": (0.0e24, 2.5e24),
@@ -820,17 +829,19 @@ if __name__ == "__main__":
             "keep_left_axes": False,
             "keep_right_axes": False,
         },
-        "ARISE-SAI_extended": {
-            "ax1_lims": (236, 244),
-            "ax2_lims": (-5, 3),
-            # "axb1_lims": (0.0e24, 2.5e24),
-            "axb1_lims": (-0.5e24, 2.5e24),
-            "axb2_lims": (286.0, 292.0),
-            "xlims": (1850, 2100),
-            "keep_left_axes": False,
-            "keep_right_axes": False,
-        },
-        "CESM2-SSP2-4.5_MCB": {
+        # "ARISE-SAI_extended": {
+        #     "selfunc": lambda ds: ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?'].set_index(ens="ens").sel(ens="001"),
+        #     "ax1_lims": (236, 244),
+        #     "ax2_lims": (-5, 3),
+        #     # "axb1_lims": (0.0e24, 2.5e24),
+        #     "axb1_lims": (-0.5e24, 2.5e24),
+        #     "axb2_lims": (286.0, 292.0),
+        #     "xlims": (1850, 2100),
+        #     "keep_left_axes": False,
+        #     "keep_right_axes": False,
+        # },
+        "CESM2_WACCM_SSP2-4.5_MCB": {
+            "selfunc": lambda ds: ds['b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?'].set_index(ens="ens").sel(ens="001"),
             "ax1_lims": (236, 244),
             "ax2_lims": (-5, 3),
             # "axb1_lims": (0.0e24, 2.5e24),
@@ -843,25 +854,28 @@ if __name__ == "__main__":
     }
 
     # %%
-    # PLOT 2: Future scenarios (CESM2-SSP2-4.5, ARISE-SAI, CESM2-SSP2-4.5_MCB)
+    # PLOT 2: Future scenarios (CESM2_WACCM_SSP2-4.5, ARISE-SAI, CESM2_WACCM_SSP2-4.5_MCB)
     # Integration starts from year 1850
-    logging.info("Creating Plot 2: Future scenarios (CESM2-SSP2-4.5, ARISE-SAI, CESM2-SSP2-4.5_MCB)")
+    logging.info("Creating Plot 2: Future scenarios (CESM2_WACCM_SSP2-4.5, ARISE-SAI, CESM2_WACCM_SSP2-4.5_MCB)")
     PLOT_CONFIGS = PLOT_CONFIGS2
 
     fig, axes = plt.subplots(2, 3, figsize=(16, 10))
     fig.subplots_adjust(wspace=0.35)
     
-    # case_list_2 = ["CESM2-SSP2-4.5", "ARISE-SAI", "CESM2-SSP2-4.5_MCB"]
-    case_list_2 = ["CESM2-SSP2-4.5", "ARISE-SAI_extended", "CESM2-SSP2-4.5_MCB"]
+    case_list_2 = ["CESM2_WACCM_SSP2-4.5", "ARISE-SAI", "CESM2_WACCM_SSP2-4.5_MCB"]
     start_year_2 = 1850
+    ts_var = "TS"
+    olr_var = "FLNT"
+    asr_var = "FSNT"
 
     for ax, axb, case_label in zip(axes[0], axes[1], case_list_2):
         logging.info(f"Plotting case: {case_label}")
 
         # Extract ASR and OLR data
-        asr_ds = data_dict[case_label][asr_var].sel(spatial="G")
-        olr_ds = data_dict[case_label][olr_var].sel(spatial="G")
-        ts_ds = data_dict[case_label][ts_var].sel(spatial="G")
+        selfunc = PLOT_CONFIGS[case_label].get("selfunc")
+        asr_ds = selfunc(data_dict[case_label])[asr_var].sel(spatial="G")
+        olr_ds = selfunc(data_dict[case_label])[olr_var].sel(spatial="G")
+        ts_ds = selfunc(data_dict[case_label])[ts_var].sel(spatial="G")
         
         # Compute annual means
         asr_annual = asr_ds.groupby("time.year").mean()
@@ -875,8 +889,8 @@ if __name__ == "__main__":
         ts_decadal = ts_ds.resample(time='10YE').mean().groupby("time.year").mean()
         eei_decadal = asr_decadal - olr_decadal
         
-        # Compute IEEI starting from start_year_1
-        ieei_ds = compute_ieei_with_start_year(asr_ds, olr_ds, start_year_1)
+        # Compute IEEI starting from start_year_2
+        ieei_ds = compute_ieei_with_start_year(asr_ds, olr_ds, start_year_2)
         
         # Create annual and decadal means for IEEI by grouping years
         ieei_annual = ieei_ds.groupby("time.year").mean()

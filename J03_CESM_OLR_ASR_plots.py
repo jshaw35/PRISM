@@ -161,12 +161,6 @@ if __name__ == "__main__":
             "append_case": None,
             "ufunc": None,
         },
-        # "CESM2-LE": {
-        #     "path": "data/RadInt_procdata/CESM2_LE/",
-        #     "case_str": "b.e21.BHISTcmip6.f09_g17.LE2-1301.001",
-        #     "append_case": None,
-        #     "ufunc": None,
-        # },
         "CESM2-WACCM-HIST": {
             "path": "data/RadInt_procdata/CESM2_WACCM_HIST/",
             "case_str": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001",
