@@ -206,8 +206,8 @@ if __name__ == "__main__":
         "CESM2_LE_2000_2009_cmip6": ["CESM2_1850control", "CESM2_LE", "CESM2_SF", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
         "CESM2_LE_2000_2009_smbb": ["CESM2_1850control", "CESM2_LE", "CESM2_SF", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
         "CESM2_WACCM_1850control": ["CESM2_WACCM_1850control", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
-        "CESM2_WACCM_HIST_2000_2014": ["CESM2_WACCM_1850control", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
-        "CESM2_WACCM_HIST_1850_1864": ["CESM2_WACCM_1850control", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
+        "CESM2_WACCM_HIST_2000_2014": ["CESM2_WACCM_1850control", "CESM2_WACCM_HIST", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
+        "CESM2_WACCM_HIST_1850_1864": ["CESM2_WACCM_1850control", "CESM2_WACCM_HIST", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
     }
 
     compare_paths = {
@@ -219,6 +219,7 @@ if __name__ == "__main__":
         "CESM2_WACCM_SSP2-4.5": f"{str(rawdata_loadpath)}/CESM2_WACCM_SSP2-4.5/",
         "CESM2_WACCM_SSP2-4.5_MCB": f"{str(rawdata_loadpath)}/CESM2_WACCM_SSP2-4.5_MCB/",
         "CESM2_WACCM_1850control": f"{str(rawdata_loadpath)}/CESM2_WACCM_1850control/",
+        "CESM2_WACCM_HIST": f"{str(rawdata_loadpath)}/CESM2_WACCM_HIST/",
     }
 
     # # Glade test paths
