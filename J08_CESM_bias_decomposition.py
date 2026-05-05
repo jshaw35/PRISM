@@ -308,6 +308,7 @@ def plot_error_comparison(
     time_dim,
     xlims,
     ax=None,
+    unc_gauss=True,
 ):
     """
     Plot error component comparison between control and simulations.
@@ -349,17 +350,24 @@ def plot_error_comparison(
 
     for component in error_components:
         control_component_data = control[test_var].sel(error_component=component)
-        control_mean = control_component_data.mean(dim=time_dim)
-        control_stddev = control_component_data.std(dim=time_dim)
+        
+        if unc_gauss:
+            control_mean = control_component_data.mean(dim=time_dim)
+            control_stddev = control_component_data.std(dim=time_dim)
+            low_bound = control_mean - 2 * control_stddev
+            high_bound = control_mean + 2 * control_stddev
+        else:
+            low_bound = control_component_data.quantile(0.05, dim=time_dim)
+            high_bound = control_component_data.quantile(0.95, dim=time_dim)
         ax.fill_between(
             np.arange(xlims[0], xlims[1] + 1, 1),
-            control_mean - 2 * control_stddev,
-            control_mean + 2 * control_stddev,
-            label=f"{control_label} - {component}",
-            color="black",
-            linestyle="-",
-            alpha=0.3,
-        )
+                low_bound,
+                high_bound,
+                label=f"{control_label} - {component}",
+                color="black",
+                linestyle="-",
+                alpha=0.3,
+            )
 
     for subdir in subdirs:
         case_str = subdirs[subdir]
@@ -394,32 +402,29 @@ def plot_error_comparison(
 if __name__ == "__main__":
     root_dir = "/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/"
     CASE_CONFIGS = {
-        # "CESM2-LME_control": {
-        #     "path": root_dir + "data/error_relativetobaseline/CESM2_LME_control/",
-        #     "subdirs": ["CESM2_LME"],
-        #     "subdir_cases": {"CESM2_LME": ["b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008", "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002"]},
-        #     "append_cases": {
-        #         "b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008": None,
-        #         "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002": None,
-        #     },
-        #     "ufunc": None,
-        # },
-        "CESM2_1850control": {
-            "path": root_dir + "data/error_relativetobaseline/CESM2_1850control/",
-            "subdirs": ["ARISE_SAI", "CESM2_1850control", "CESM2_LE", "CESM2_SF", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
+        "CESM2-LME_control": {
+            "path": root_dir + "data/error_relativetobaseline/CESM2_LME_control/",
+            "subdirs": ["CESM2_LME"],
+            "subdir_cases": {"CESM2_LME": ["b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008", "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002"]},
+            "append_cases": {
+                "b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008": None,
+                "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002": None,
+            },
+            "ufunc": None,
+        },
+        "CESM2_WACCM_1850control": {
+            "path": root_dir + "data/error_relativetobaseline/CESM2_WACCM_1850control/",
+            "subdirs": ["CESM2_WACCM_1850control", "CESM2_WACCM_HIST", "CESM2_WACCM_SSP2-4.5", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5_MCB"],
             "subdir_cases": {
-                "CESM2_1850control": ["b.e21.B1850.f09_g17.CMIP6-piControl.001"],
-                "CESM2_LE": ["b.e21.BHISTcmip6.f09_g17.LE2-1301.00?", "b.e21.BHISTsmbb.f09_g17.LE2-*.00?"],
-                "CESM2_SF": ["b.e21.B1850cmip6.f09_g17.CESM2-SF-EE.101"],
+                "CESM2_WACCM_1850control": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"],
+                "CESM2_WACCM_HIST": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?"],
                 "CESM2_WACCM_SSP2-4.5": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?"],
                 "ARISE_SAI": ["1p5K-SAI.00?", "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?", "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?"],
                 "CESM2_WACCM_SSP2-4.5_MCB": ["b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?"],
             },
             "append_cases": {
-                "b.e21.B1850.f09_g17.CMIP6-piControl.001": None,
-                "b.e21.BHISTcmip6.f09_g17.LE2-1301.00?": None,
-                "b.e21.BHISTsmbb.f09_g17.LE2-*.00?": None,
-                "b.e21.B1850cmip6.f09_g17.CESM2-SF-EE.101": None,
+                "b.e21.BW1850.f09_g17.CMIP6-piControl.001": None,
+                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?": None,
                 "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?": None,
                 "1p5K-SAI.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?",
                 "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?",
@@ -428,22 +433,19 @@ if __name__ == "__main__":
             },
             "ufunc": None,
         },
-        "CESM2-LE_CMIP6": {
-            "path": root_dir + "data/error_relativetobaseline/CESM2_LE_2000_2009_cmip6/",
-            "subdirs": ["ARISE_SAI", "CESM2_1850control", "CESM2_LE", "CESM2_SF", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
+        "CESM2(WACCM)_1850_1864": {
+            "path": root_dir + "data/error_relativetobaseline/CESM2_WACCM_HIST_1850_1864/",
+            "subdirs": ["CESM2_WACCM_1850control", "CESM2_WACCM_HIST", "CESM2_WACCM_SSP2-4.5", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5_MCB"],
             "subdir_cases": {
-                "CESM2_1850control": ["b.e21.B1850.f09_g17.CMIP6-piControl.001"],
-                "CESM2_LE": ["b.e21.BHISTcmip6.f09_g17.LE2-1301.00?", "b.e21.BHISTsmbb.f09_g17.LE2-*.00?"],
-                "CESM2_SF": ["b.e21.B1850cmip6.f09_g17.CESM2-SF-EE.101"],
+                "CESM2_WACCM_1850control": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"],
+                "CESM2_WACCM_HIST": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?"],
                 "CESM2_WACCM_SSP2-4.5": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?"],
                 "ARISE_SAI": ["1p5K-SAI.00?", "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?", "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?"],
                 "CESM2_WACCM_SSP2-4.5_MCB": ["b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?"],
             },
             "append_cases": {
-                "b.e21.B1850.f09_g17.CMIP6-piControl.001": None,
-                "b.e21.BHISTcmip6.f09_g17.LE2-1301.00?": None,
-                "b.e21.BHISTsmbb.f09_g17.LE2-*.00?": None,
-                "b.e21.B1850cmip6.f09_g17.CESM2-SF-EE.101": None,
+                "b.e21.BW1850.f09_g17.CMIP6-piControl.001": None,
+                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?": None,
                 "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?": None,
                 "1p5K-SAI.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?",
                 "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?",
@@ -452,32 +454,27 @@ if __name__ == "__main__":
             },
             "ufunc": None,
         },
-        "CESM2-LE_SMBB": {
-            "path": root_dir + "data/error_relativetobaseline/CESM2_LE_2000_2009_smbb/",
-            "subdirs": ["ARISE_SAI", "CESM2_1850control", "CESM2_LE", "CESM2_SF", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
+        "CESM2(WACCM)_2000_2014": {
+            "path": root_dir + "data/error_relativetobaseline/CESM2_WACCM_HIST_2000_2014/",
+            "subdirs": ["CESM2_WACCM_1850control", "CESM2_WACCM_HIST", "CESM2_WACCM_SSP2-4.5", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5_MCB"],
             "subdir_cases": {
-                "CESM2_1850control": ["b.e21.B1850.f09_g17.CMIP6-piControl.001"],
-                "CESM2_LE": ["b.e21.BHISTcmip6.f09_g17.LE2-1301.00?", "b.e21.BHISTsmbb.f09_g17.LE2-*.00?"],
-                "CESM2_SF": ["b.e21.B1850cmip6.f09_g17.CESM2-SF-EE.101"],
+                "CESM2_WACCM_1850control": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"],
+                "CESM2_WACCM_HIST": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?"],
                 "CESM2_WACCM_SSP2-4.5": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?"],
                 "ARISE_SAI": ["1p5K-SAI.00?", "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?", "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?"],
                 "CESM2_WACCM_SSP2-4.5_MCB": ["b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?"],
             },
             "append_cases": {
-                "b.e21.B1850.f09_g17.CMIP6-piControl.001": None,
-                "b.e21.BHISTcmip6.f09_g17.LE2-1301.00?": None,
-                "b.e21.BHISTsmbb.f09_g17.LE2-*.00?": None,
-                "b.e21.B1850cmip6.f09_g17.CESM2-SF-EE.101": None,
+                "b.e21.BW1850.f09_g17.CMIP6-piControl.001": None,
+                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?": None,
                 "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?": None,
                 "1p5K-SAI.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?",
                 "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?",
                 "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?": "1p5K-SAI.00?",
                 "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?",
             },
-            "append_case": None,
             "ufunc": None,
         },
-        # Add new cases here when ready
     }
 
     # %%
@@ -602,15 +599,12 @@ if __name__ == "__main__":
     
     # %%
     # Draft some plots to give opencode something to work with later.
-    case_label = "CESM2_1850control"
-    control_label = "CESM2_1850control"
+    case_label = "CESM2_WACCM_1850control"
+    control_label = "CESM2_WACCM_1850control"
     control_case = CASE_CONFIGS[case_label]["subdir_cases"][control_label][0]
     subdirs = {
-        # "CESM2_1850control": "b.e21.B1850.f09_g17.CMIP6-piControl.001",
-        # "CESM2_LE": "b.e21.BHISTcmip6.f09_g17.LE2-1301.00?",
-        # "CESM2_SF": "b.e21.B1850cmip6.f09_g17.CESM2-SF-EE.101",
+        "CESM2_WACCM_HIST": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?",
         "CESM2_WACCM_SSP2-4.5": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?",
-        # "ARISE_SAI": "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?",
         "ARISE_SAI": 'b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?',
         "CESM2_WACCM_SSP2-4.5_MCB": "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?",
     }
@@ -626,15 +620,15 @@ if __name__ == "__main__":
         # "C": {"label": "Conditional bias error", "linestyle": "-."},
         # "P": {"label": "Phase error", "linestyle": ":"},
     }
-    error_components = ["NMSE", "P"]
+    # error_components = ["NMSE", "P"]
+    error_components = ["NMSE"]
     component_linestyles = ["-", "--", "-.", ":"]
     # xlims = (1850, 2100)
-    xlims = (2015, 2070)
+    # xlims = (2015, 2070)
+    xlims = (1850, 2070)
     case_plot_args = {
         "ARISE_SAI": {"color": "red"},
-        "CESM2_1850control": {"color": "blue"},
-        "CESM2_LE": {"color": "green"},
-        "CESM2_SF": {"color": "orange"},
+        "CESM2_WACCM_HIST": {"color": "blue"},
         "CESM2_WACCM_SSP2-4.5": {"color": "purple"},
         "CESM2_WACCM_SSP2-4.5_MCB": {"color": "brown"},
     }
@@ -678,22 +672,146 @@ if __name__ == "__main__":
     # fig.savefig("figures/figure3_draft.png", dpi=300, bbox_inches='tight')
     # logging.info("Saved figure3_draft.png")
     # plt.close(fig)
-# %%
-# Another example plot
-# test_data = data_dict['CESM2_1850control']["CESM2_WACCM_SSP2-4.5"]['b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?']
-# test_data = data_dict['CESM2_1850control']["ARISE_SAI"]["1p5K-SAI.00?"]
-# test_data = data_dict["CESM2_1850control"]["CESM2_WACCM_SSP2-4.5"]["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?"]
-# test_data = data_dict["CESM2_1850control"]["ARISE_SAI"]["1p5K-SAI.00?"]
-# test_data = data_dict["CESM2_1850control"]["ARISE_SAI"]["b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?"]
-# test_data = data_dict["CESM2_1850control"]["ARISE_SAI"]['b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?']
-test_data = data_dict["CESM2_1850control"]["CESM2_WACCM_SSP2-4.5_MCB"]['b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?']
 
-var = "FSNS"
-component = "NMSE"
-fig, ax = plt.subplots(1, 1, figsize=(6,4))
-mean_data = test_data[var].sel(error_component=component).mean(dim="ens")
-ax.plot(mean_data.year, mean_data)
-for i in range(test_data.sizes["ens"]):
-    _sub_data = test_data[var].sel(error_component=component).isel(ens=i)
-    ax.plot(_sub_data.year, _sub_data, linewidth=0.5, alpha=0.5)
+    # %%
+    # Energetic change 1850 - 2070 for the most relevant variables.
+    case_label = "CESM2_WACCM_1850control"
+    control_label = "CESM2_WACCM_1850control"
+    control_case = CASE_CONFIGS[case_label]["subdir_cases"][control_label][0]
+    subdirs = {
+        # "CESM2_WACCM_1850control": "b.e21.B1850.f09_g17.CMIP6-piControl.001",
+        "CESM2_WACCM_HIST": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?",
+        "CESM2_WACCM_SSP2-4.5": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?",
+        "ARISE_SAI": 'b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?',
+        "CESM2_WACCM_SSP2-4.5_MCB": "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?",
+    }
+    test_var = "PRECIP_THERMO"
+    test_var = "FSNS"
+    component_plot_args = {
+        "NMSE": {"linestyle": "solid"},
+        "U": {"linestyle": "dotted"},
+        "C": {"linestyle": "-."},
+        "P": {"linestyle": ":"},
+        # "NMSE": {"label": "Variance error", "linestyle": "--"},
+        # "U": {"label": "Mean bias error", "linestyle": "dotted", },
+        # "C": {"label": "Conditional bias error", "linestyle": "-."},
+        # "P": {"label": "Phase error", "linestyle": ":"},
+    }
+    # error_components = ["NMSE", "P"]
+    error_components = ["NMSE"]
+    component_linestyles = ["-", "--", "-.", ":"]
+    # xlims = (1850, 2100)
+    # xlims = (2015, 2070)
+    xlims = (1850, 2070)
+    ylims = (0, None)
+    case_plot_args = {
+        "ARISE_SAI": {"color": "red"},
+        "CESM2_WACCM_HIST": {"color": "blue"},
+        "CESM2_WACCM_SSP2-4.5": {"color": "purple"},
+        "CESM2_WACCM_SSP2-4.5_MCB": {"color": "brown"},
+    }
+    time_dim = "year"
+
+    plot_vars = [
+        "FLNT", "FSNT", "FLNS", "FSNS",
+        "SHFLX", "LHFLX", "PRECIP_THERMO",
+        # "SHFLX", "LHFLX", "PRECT", "PRECIP_THERMO",
+    ]
+    fig, axs = plt.subplots(2, 4, figsize=(20, 8))
+    fig.subplots_adjust(wspace=0.3)
+    axs = axs.flat
+    for ax, var in zip(axs, plot_vars):
+
+        _, ax = plot_error_comparison(
+            data_dict=data_dict,
+            case_label=case_label,
+            control_label=control_label,
+            control_case=control_case,
+            subdirs=subdirs,
+            test_var=var,
+            component_plot_args=component_plot_args,
+            error_components=error_components,
+            case_plot_args=case_plot_args,
+            time_dim=time_dim,
+            xlims=xlims,
+            ax=ax,
+            unc_gauss=False,
+        )
+        ax.set_ylim(ylims)
+        ax.set_ylabel(f"{var} Error")
+        ax.legend().remove()
+    ax.legend(loc=[1.25, 0.35])
+    # Remove the last subplot
+    fig.delaxes(axs[-1])
+
+    fig.savefig("figures/figure3b_draft.png", dpi=300, bbox_inches='tight')
+    logging.info("Saved figure3b_draft.png")
+    plt.close(fig)
+
+    # %%
+    # Energetic change in the last millenium
+    case_label = "CESM2-LME_control"
+    control_label = "CESM2_LME"
+    control_case = CASE_CONFIGS[case_label]["subdir_cases"][control_label][0]
+    subdirs = {
+        "CESM2_LME": 'b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002',
+    }
+    test_var = "PRECIP_THERMO"
+    test_var = "FSNS"
+    component_plot_args = {
+        "NMSE": {"linestyle": "solid"},
+        "U": {"linestyle": "dotted"},
+        "C": {"linestyle": "-."},
+        "P": {"linestyle": ":"},
+        # "NMSE": {"label": "Variance error", "linestyle": "--"},
+        # "U": {"label": "Mean bias error", "linestyle": "dotted", },
+        # "C": {"label": "Conditional bias error", "linestyle": "-."},
+        # "P": {"label": "Phase error", "linestyle": ":"},
+    }
+    # error_components = ["NMSE", "P"]
+    error_components = ["NMSE"]
+    component_linestyles = ["-", "--", "-.", ":"]
+    xlims = (850, 1850)
+    ylims = (0, None)
+    case_plot_args = {
+        "CESM2_LME": {"color": "green"},
+    }
+    time_dim = "year"
+
+    plot_vars = [
+        "FLNT", "FSNT", "FLNS", "FSNS",
+        "SHFLX", "LHFLX", "PRECIP_THERMO",
+        # "SHFLX", "LHFLX", "PRECT", "PRECIP_THERMO",
+    ]
+    fig, axs = plt.subplots(2, 4, figsize=(20, 8))
+    fig.subplots_adjust(wspace=0.3)
+    axs = axs.flat
+    for ax, var in zip(axs, plot_vars):
+
+        _, ax = plot_error_comparison(
+            data_dict=data_dict,
+            case_label=case_label,
+            control_label=control_label,
+            control_case=control_case,
+            subdirs=subdirs,
+            test_var=var,
+            component_plot_args=component_plot_args,
+            error_components=error_components,
+            case_plot_args=case_plot_args,
+            time_dim=time_dim,
+            xlims=xlims,
+            ax=ax,
+            unc_gauss=False,
+        )
+        ax.set_ylim(ylims)
+        ax.set_ylabel(f"{var} Error")
+        ax.legend().remove()
+    # ax.legend(loc=[1.05, 0.35])
+    # Remove the last subplot
+    fig.delaxes(axs[-1])
+
+    fig.savefig("figures/figure3paleo_draft.png", dpi=300, bbox_inches='tight')
+    logging.info("Saved figure3paleo_draft.png")
+    plt.close(fig)
+
 # %%
