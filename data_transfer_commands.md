@@ -113,3 +113,9 @@ find /glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/b.e21.BWHIST.f09_g1
 
 *One at a time transferring (need to update the ensemble index):*
 ./job_scripts/gdex_file_transfer.sh "*month_1/**b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM*.TS.*" /glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001 josh2250@login.rc.colorado.edu:/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_WACCM_HIST/
+
+__Processes OHC data:__
+
+find /glade/work/jonahshaw/PRISM_data/spatial_OHC_data -wholename "*nc"
+
+./job_scripts/gdex_file_transfer.sh "*nc" /glade/work/jonahshaw/PRISM_data/spatial_OHC_data josh2250@login.rc.colorado.edu:/home/josh2250/kaydata/jshaw/RadInt_ohcdata/
