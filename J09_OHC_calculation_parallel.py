@@ -254,7 +254,7 @@ if __name__ == "__main__":
         if not os.path.exists(ancillary_file):
             test_file = "/glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/b.e21.BW1850.f09_g17.CMIP6-piControl.001/ocn/proc/tseries/month_1/b.e21.BW1850.f09_g17.CMIP6-piControl.001.pop.h.TEMP.000101-009912.nc"
             test_ds = xr.open_dataset(test_file)
-            test_ds[["TAREA", "KMT", "z_w_bot", "dz"]].to_netcdf(ancillary_file)
+            test_ds[["TAREA", "UAREA", "KMT", "z_w_bot", "dz"]].to_netcdf(ancillary_file)
 
     for case in CASE_CONFIG:
         rawdata_root = Path(CASE_CONFIG[case]["data_dir"])
