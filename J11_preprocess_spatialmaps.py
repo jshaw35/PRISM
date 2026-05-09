@@ -1,3 +1,12 @@
+"""
+Note: The CESM2(WACCM6) control simulation is 500 years long, but the historical members are taken from years 56, 61, and 71. The CESM2(WACCM6) ocean is not stable, however. So we cannot sample it to construct a distribution of variability characteristics.
+This would also explain why the OHC is greater than the TOA EEI in the last millenium and historical simulations.
+
+From Danabasoglu (2020):
+The three members of the CESM2(WACCM6) historical simulations are initialized from Years 56, 61, and 71 of the corresponding PI control integration. The late and early start dates for the CESM2(CAM6) and CESM2(WACCM6) historical simulations simply reflect their respective PI control integration lengths and are not intended to avoid or sample any particular variability characteristics.
+
+"""
+
 # %%
 from pathlib import Path
 import os
@@ -112,170 +121,6 @@ def get_weights_by_month(
         },
     )
     return weights_ds
-
-
-def plot_eei_timeseries(
-    asr_annual, olr_annual, eei_annual, ieei_annual,
-    asr_decadal, olr_decadal, eei_decadal, ieei_decadal,
-    ax=None, fontsize=14, case_name="",time_dim="year",
-    colors=sns.color_palette("colorblind", n_colors=3),
-):
-    """
-    Plot timeseries of ASR, OLR, EEI, and IEEI on a subplot with twinned y-axes.
-    
-    Parameters
-    ----------
-    asr_annual, olr_annual, eei_annual, ieei_annual : xr.DataArray
-        Annual-mean data
-    asr_decadal, olr_decadal, eei_decadal, ieei_decadal : xr.DataArray
-        Decadal-mean data
-    ax : matplotlib.axes.Axes, optional
-        Axis to plot on. If None, a new figure and axis are created.
-    fontsize : int, default 14
-        Font size for labels and titles
-    case_name : str, default ""
-        Name of the case to use as subplot title
-    
-    Returns
-    -------
-    ax1, ax2, ax3 : matplotlib.axes.Axes
-        The three twinned axes (ASR/OLR, EEI, IEEI)
-    """
-    if ax is None:
-        fig, ax = plt.subplots(1, 1, figsize=(8, 5))
-    
-    ax1 = ax
-    ax2 = ax1.twinx()
-    if ieei_annual is not None:
-        ax3 = ax1.twinx()
-        
-        # Offset the right spine of ax3 so it doesn't overlap with ax2
-        ax3.spines["right"].set_position(("outward", 50))
-
-    # Variable colors
-    asr_color = colors[0]
-    olr_color = colors[1]
-    eei_color = colors[2]
-    if ieei_annual is not None:
-        ieei_color = colors[3]
-
-    # Plot annual means (thin, semi-transparent)
-    ax1.plot(asr_annual[time_dim], asr_annual, color=asr_color, linestyle="-", 
-             linewidth=0.7, alpha=0.5, label="ASR (annual)")
-    ax1.plot(olr_annual[time_dim], olr_annual, color=olr_color, linestyle="-", 
-             linewidth=0.7, alpha=0.5, label="OLR (annual)")
-    
-    ax2.plot(eei_annual[time_dim], eei_annual, color=eei_color, linestyle="-", 
-             linewidth=0.7, alpha=0.5, label="EEI (annual)")
-    if ieei_annual is not None:
-        ax3.plot(ieei_annual[time_dim], ieei_annual, color=ieei_color, linestyle="-", 
-                linewidth=0.7, alpha=0.5, label="IEEI (annual)")
-    
-    # Plot decadal means (thick, solid)
-    ax1.plot(asr_decadal[time_dim], asr_decadal, color=asr_color, linestyle="-", 
-             linewidth=2.5, label="ASR (decadal)")
-    ax1.plot(olr_decadal[time_dim], olr_decadal, color=olr_color, linestyle="-", 
-             linewidth=2.5, label="OLR (decadal)")
-    
-    ax2.plot(eei_decadal[time_dim], eei_decadal, color=eei_color, linestyle="-", 
-             linewidth=2.5, label="EEI (decadal)")
-    
-    if ieei_annual is not None:
-        ax3.plot(ieei_decadal[time_dim], ieei_decadal, color=ieei_color, linestyle="-", 
-                linewidth=2.5, label="IEEI (decadal)")
-    
-    # Set axis labels and colors
-    ax1.set_xlabel("Year", fontsize=fontsize)
-    ax1.set_ylabel("ASR, OLR [W/m²]", fontsize=fontsize)
-    ax1.tick_params(axis="y")
-    
-    ax2.set_ylabel("EEI [W/m²]", fontsize=fontsize, color=eei_color)
-    ax2.tick_params(axis="y", labelcolor=eei_color)
-    
-    if ieei_annual is not None:
-        ax3.set_ylabel("IEEI [W]", fontsize=fontsize, color=ieei_color)
-        ax3.tick_params(axis="y", labelcolor=ieei_color)
-    
-    # Add title and grid
-    ax1.set_title(case_name, fontsize=fontsize)
-    ax1.grid(True, alpha=0.3)
-
-    if ieei_annual is not None:
-        return ax1, ax2, ax3
-    else:
-        return ax1, ax2, None
-
-
-def plot_ieei_ts(
-    ieei_annual, ieei_decadal, ts_annual, ts_decadal, ax=None,
-    fontsize=14, time_dim="year",
-    colors=sns.color_palette("colorblind", n_colors=6)[3:],
-):
-
-    if ax is None:
-        fig, ax = plt.subplots(1, 1, figsize=(8, 5))
-
-    ax1 = ax
-    ax2 = ax.twinx()
-    ax1.grid(True, alpha=0.3)
-    # Plot annual means (thin, solid)
-    ax1.plot(ieei_annual[time_dim], ieei_annual, color=colors[0], linestyle="-", 
-                linewidth=0.7, alpha=0.5, label="IEEI (annual)")
-    ax2.plot(ts_annual[time_dim], ts_annual, color=colors[1], linestyle="-", 
-                linewidth=0.7, alpha=0.5, label="TS (annual)")
-    
-    # Plot decadal means (thick, solid)
-    ax1.plot(ieei_decadal[time_dim], ieei_decadal, color=colors[0], linestyle="-", 
-                linewidth=2.5, alpha=1, label="IEEI (decadal)")
-    ax2.plot(ts_decadal[time_dim], ts_decadal, color=colors[1], linestyle="-", 
-                linewidth=2.5, alpha=1, label="TS (decadal)")
-
-    ax1.set_xlabel("Year", fontsize=14)
-    ax1.set_ylabel("IEEI [J]", fontsize=14)#, color=colors[0])
-    ax1.tick_params(axis="y")#, labelcolor=colors[0])
-
-    ax2.tick_params(axis="y", labelcolor=colors[1])
-    ax2.set_ylabel("Surface Temperature [K]", fontsize=14, color=colors[1])
-
-    return ax1, ax2
-
-
-def plot_ieei_ts_ohc(
-    ieei_annual, ieei_decadal, ts_annual, ts_decadal, ohc_annual, ohc_decadal, ax=None,
-    fontsize=14, time_dim="year",
-    colors=sns.color_palette("colorblind", n_colors=6)[3:],
-    
-):
-
-    if ax is None:
-        fig, ax = plt.subplots(1, 1, figsize=(8, 5))
-
-    ax1 = ax
-    ax2 = ax.twinx()
-    ax1.grid(True, alpha=0.3)
-    # Plot annual means (thin, solid)
-    ax1.plot(ieei_annual[time_dim], ieei_annual, color=colors[0], linestyle="-", 
-                linewidth=0.7, alpha=0.5, label="IEEI (annual)")
-    ax2.plot(ts_annual[time_dim], ts_annual, color=colors[1], linestyle="-", 
-                linewidth=0.7, alpha=0.5, label="TS (annual)")
-    ax1.plot(ohc_annual[time_dim], ohc_annual, color=colors[2], linestyle="-", 
-                linewidth=0.7, alpha=0.5, label="OHC (annual)")
-    # Plot decadal means (thick, solid)
-    ax1.plot(ieei_decadal[time_dim], ieei_decadal, color=colors[0], linestyle="-", 
-                linewidth=2.5, alpha=1, label="IEEI (decadal)")
-    ax2.plot(ts_decadal[time_dim], ts_decadal, color=colors[1], linestyle="-", 
-                linewidth=2.5, alpha=1, label="TS (decadal)")
-    ax1.plot(ohc_decadal[time_dim], ohc_decadal, color=colors[2], linestyle="-", 
-                linewidth=2.5, alpha=1, label="OHC (decadal)")
-
-    ax1.set_xlabel("Year", fontsize=14)
-    ax1.set_ylabel("IEEI, OHC [J]", fontsize=14)
-    ax1.tick_params(axis="y")
-
-    ax2.tick_params(axis="y", labelcolor=colors[1])
-    ax2.set_ylabel("Surface Temperature [K]", fontsize=14, color=colors[1])
-
-    return ax1, ax2
 
 
 def crawl_and_list(input_dir, file_string):
@@ -689,28 +534,42 @@ def load_ensemble_cases(datapath_subdir, case_str, varlist):
         return combined_ds
 
 
+def detrend_dim(da, dim, deg=1):
+    # detrend along a single dimension
+    p = da.polyfit(dim=dim, deg=deg)
+    fit = xr.polyval(da[dim], p.polyfit_coefficients)
+    return da - fit
+
+
+def detrend_ds(ds, dim, deg=1):
+    # Detrend all variables in a dataset
+    detrended_list = []
+    for _var in ds.data_vars:
+        polyfit_da = detrend_dim(ds[_var], dim=dim, deg=deg)
+        polyfit_da.name = _var
+        detrended_list.append(polyfit_da)
+    detrended_ds = xr.merge(detrended_list)
+
+    return detrended_ds
+
+
 # %%
 
 if __name__ == "__main__":
     root_dir = "/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/"
     CASE_CONFIGS1 = {
-        "CESM_LME":{
-            "path": root_dir + "data/RadInt_procdata/CESM_LME/",
-            "subdir_cases": ["b.e11.BLMTRC5CN.f19_g16.00?"],
-            "append_cases": {
-                "b.e11.BLMTRC5CN.f19_g16.00?": None,
-            },
-            "ufunc": None,
-        },
-        "CESM2_LME": {
-            "path": root_dir + "data/RadInt_procdata/CESM2_LME/",
-            "subdir_cases": ["b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008", "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002"],
-            "append_cases": {
-                "b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008": None,
-                "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002": None,
-            },
-            "ufunc": None,
-        },
+        # "CESM2_LME": {
+        #     "path": root_dir + "data/RadInt_procdata/CESM2_LME/",
+        #     "subdir_cases": [
+        #     "b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008",
+        #     "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002",
+        #     ],
+        #     "append_cases": {
+        #         "b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008": None,
+        #         "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002": None,
+        #     },
+        #     "ufunc": None,
+        # },
         "CESM2_WACCM_1850control" :{
             "path": root_dir + "data/RadInt_procdata/CESM2_WACCM_1850control/",
             "subdir_cases": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"],
@@ -721,7 +580,10 @@ if __name__ == "__main__":
         },
         "CESM2_WACCM_HIST": {
             "path": root_dir + "data/RadInt_procdata/CESM2_WACCM_HIST/",
-            "subdir_cases": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?", "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001"],
+            "subdir_cases": [
+                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?",
+                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001",
+            ],
             "append_cases": {
                 "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?": None,
                 "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001": None,
@@ -732,47 +594,61 @@ if __name__ == "__main__":
             "path": root_dir + "data/RadInt_procdata/CESM2_WACCM_SSP2-4.5/",
             "subdir_cases": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??"],
             "append_cases": {
-                "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001",
+                "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??": None,
             },
-            "ufunc": None,
+            "ufunc": lambda ds: ds.sel(time=slice("2060", "2069")).mean(dim="time"),
         },
         "ARISE-SAI": {
             "path": root_dir + "data/RadInt_procdata/ARISE_SAI/",
-            "subdir_cases": ["1p5K-SAI.00?", "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?", "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?"],
+            "subdir_cases": [
+                "1p5K-SAI.00?",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?",
+            ],
             "append_cases": {
-                "1p5K-SAI.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?": "1p5K-SAI.00?",
+                "1p5K-SAI.00?": None,
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?": None,
+                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?": None,
             },
-            "ufunc": None,
+            "ufunc": lambda ds: ds.sel(time=slice("2060", "2069")).mean(dim="time"),
         },
         "CESM2_WACCM_SSP2-4.5_MCB": {
             "path": root_dir + "data/RadInt_procdata/CESM2_WACCM_SSP2-4.5_MCB/",
-            "subdir_cases": ["b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?", "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000"],
+            "subdir_cases": [
+                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000",
+            ],
             "append_cases": {
-                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?": None,
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": None,
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": None,
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": None,
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000": None,
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000": None,
             },
-            "ufunc": None,
+            "ufunc": lambda ds: ds.sel(time=slice("2060", "2069")).mean(dim="time"),
         },
     }
 
     # Configs for loading OHC data
     ohc_data_root = "/glade/work/jonahshaw/PRISM_data/spatial_OHC_data/"
     CASE_CONFIGS2 = {
-        "CESM2_LME": {
-            "path": ohc_data_root + "CESM2_LME/",
-            "subdir_cases": ["b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008", "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002"],
-            "append_cases": {
-                "b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008": None,
-                "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002": None,
-            },
-            "ufunc": None,
-        },
+        # "CESM2_LME": {
+        #     "path": ohc_data_root + "CESM2_LME/",
+        #     "subdir_cases": [
+        #         "b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008",
+        #         "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002",
+        #     ],
+        #     "append_cases": {
+        #         "b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008": None,
+        #         "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002": None,
+        #     },
+        #     "ufunc": None,
+        # },
         "CESM2_WACCM_1850control" :{
             "path": ohc_data_root + "CESM2_WACCM_1850control/",
             "subdir_cases": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"],
@@ -783,7 +659,10 @@ if __name__ == "__main__":
         },
         "CESM2_WACCM_HIST": {
             "path": ohc_data_root + "CESM2_WACCM_HIST/",
-            "subdir_cases": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?", "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001"],
+            "subdir_cases": [
+                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?",
+                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001",
+            ],
             "append_cases": {
                 "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?": None,
                 "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001": None,
@@ -794,32 +673,43 @@ if __name__ == "__main__":
             "path": ohc_data_root + "CESM2_WACCM_SSP2-4.5/",
             "subdir_cases": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??"],
             "append_cases": {
-                "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001",
+                "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??": None,
             },
-            "ufunc": None,
+            "ufunc": lambda ds: ds.sel(time=slice("2060", "2069")).mean(dim="time"),
         },
         "ARISE-SAI": {
             "path": ohc_data_root + "ARISE_SAI/",
-            "subdir_cases": ["1p5K-SAI.00?", "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?", "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?"],
+            "subdir_cases": [
+                "1p5K-SAI.00?",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?",
+            ],
             "append_cases": {
-                "1p5K-SAI.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?": "1p5K-SAI.00?",
+                "1p5K-SAI.00?": None,
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?": None,
+                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?": None,
             },
-            "ufunc": None,
+            "ufunc": lambda ds: ds.sel(time=slice("2060", "2069")).mean(dim="time"),
         },
         "CESM2_WACCM_SSP2-4.5_MCB": {
             "path": ohc_data_root + "CESM2_WACCM_SSP2-4.5_MCB/",
-            "subdir_cases": ["b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?", "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000"],
+            "subdir_cases": [
+                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000"
+            ],
             "append_cases": {
-                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?": None,
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": None,
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": None,
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": None,
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000": None,
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000": None,
             },
-            "ufunc": None,
+            "ufunc": lambda ds: ds.sel(time=slice("2060", "2069")).mean(dim="time"),
         },
     }
 
@@ -830,279 +720,49 @@ if __name__ == "__main__":
     ohc_varlist = ["OHC"]
 
     # Load data using the generalized function
-    data_dict = load_data_with_configs(CASE_CONFIGS1, data_varlist, year_dim=year_dim)
+    # data_dict = load_data_with_configs(CASE_CONFIGS1, data_varlist, year_dim=year_dim)
     ohc_dict = load_data_with_configs(CASE_CONFIGS2, ohc_varlist, year_dim=year_dim)
 
     # %%
-    PLOT_CONFIGS1 = {
-        "CESM_LME": {
-            "selfunc": lambda ds: ds['b.e11.BLMTRC5CN.f19_g16.00?'].sel(ens="002"),
-            # "ax1_lims": (228, 237),
-            # "ax2_lims": (-3, 6),
-            "ax1_lims": (230, 240),
-            "ax2_lims": (-8, 2),
-            "ax1_major_y": MultipleLocator(1),
-            "axb1_lims": (-1.5e24, 1.5e24),
-            "axb2_lims": (286.25, 287.75),
-            "axb1_yticks": np.arange(-1.5e24, 1.5e24+0.01e24, 0.5e24),
-            "axb2_yticks": np.arange(286.25, 287.75+0.01, 0.25),
-            "xlims": (850, 1850),
-            "keep_left_axes": True,
-            "keep_right_axes": True,
-        },
-        "CESM2_LME": {
-            "selfunc": lambda ds: ds['b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002'],
-            "selfunc_ohc": lambda ds: ds['b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002']["OHC_global_mean"].sel(ohc_depth=-1) * ds['b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002'].attrs["ocean_area_m2"],
-            # "ax1_lims": (235, 244),
-            # "ax2_lims": (-3, 6),
-            "ax1_lims": (237, 247),
-            "ax2_lims": (-8, 2),
-            "ax1_major_y": MultipleLocator(1),
-            "axb1_lims": (-0.5e24, 1.0e24),
-            "axb2_lims": (287.0, 289.5),
-            # "axb1_lims": (-0.5e24, 1.0e24),
-            # "axb2_lims": (287.0, 289.5),
-            "axb1_yticks": np.arange(-0.5e24, 1.25e24+0.01e24, 0.25e24),
-            "axb2_yticks": np.arange(286.5, 290.0+0.01, 0.5),
-            "xlims": (850, 1850),
-            "keep_left_axes": True,
-            "keep_right_axes": True,
-        },
-    }
-    # %%
-    # PLOT 1: Historical scenarios (CESM-LME, CESM2-LME)
-    # Integration starts from year 850
-    logging.info("Creating Plot 1: Historical scenarios (CESM-LME, CESM2-LME)")
-    PLOT_CONFIGS = PLOT_CONFIGS1
-    
-    fig, axes = plt.subplots(2, 2, figsize=(15, 10))
-    fig.subplots_adjust(wspace=0.40)
-    
-    case_list_1 = ["CESM_LME", "CESM2_LME"]
-    start_year_1 = 850
-    ts_var = "TS"
-    olr_var = "FLNT"
-    asr_var = "FSNT"
-
-    for ax, axb, case_label in zip(axes[0], axes[1], case_list_1):
-        logging.info(f"Plotting case: {case_label}")
-        # Extract ASR and OLR data
-        selfunc = PLOT_CONFIGS[case_label].get("selfunc")
-        selfunc_ohc = PLOT_CONFIGS[case_label].get("selfunc_ohc")
-        asr_ds = selfunc(data_dict[case_label])[asr_var].sel(spatial="G")
-        olr_ds = selfunc(data_dict[case_label])[olr_var].sel(spatial="G")
-        ts_ds = selfunc(data_dict[case_label])[ts_var].sel(spatial="G")
-        ohc_ds = selfunc_ohc(ohc_dict[case_label]) if selfunc_ohc is not None else None
-        ohc_ds = ohc_ds - ohc_ds.isel(time=0) if ohc_ds is not None else None  # Convert OHC to anomaly
-        
-        # Compute annual means
-        asr_annual = asr_ds.groupby("time.year").mean()
-        olr_annual = olr_ds.groupby("time.year").mean()
-        ts_annual = ts_ds.groupby("time.year").mean()
-        eei_annual = asr_annual - olr_annual
-        ohc_annual = ohc_ds.groupby("time.year").mean() if ohc_ds is not None else None
-        
-        # Compute decadal means and center the decade labels by adding 5 years to the year coordinate (e.g. decade from 850-859 will be labeled as 855)        # Compute decadal means and center the decade labels by adding 5 years to the year coordinate (e.g. decade from 850-859 will be labeled as 855)
-        asr_decadal = compute_decadal(asr_ds)
-        olr_decadal = compute_decadal(olr_ds)
-        ts_decadal = compute_decadal(ts_ds)
-        eei_decadal = asr_decadal - olr_decadal
-        ohc_decadal = compute_decadal(ohc_ds) if ohc_ds is not None else None
-        # Compute IEEI starting from start_year_1
-        ieei_ds = compute_ieei_with_start_year(asr_ds, olr_ds, start_year_1)
-        
-        # Create annual and decadal means for IEEI by grouping years
-        ieei_annual = ieei_ds.groupby("time.year").mean()
-        ieei_decadal = ieei_ds.resample(time='10YE', offset=pd.Timedelta(weeks=-52)).mean().groupby("time.year").mean()
-        
-        # Plot ASR, OLR, and EEI
-        ax1, ax2, ax3 = plot_eei_timeseries(
-            asr_annual, olr_annual, eei_annual, None,
-            asr_decadal, olr_decadal, eei_decadal, None,
-            ax=ax, fontsize=14, case_name=case_label,
-            colors=sns.color_palette("colorblind", n_colors=6),
-        )
-        # Plot IEEI, TS, and OHC if available
-        if ohc_annual is not None:
-            axb, axb2 = plot_ieei_ts_ohc(
-                ieei_annual=ieei_annual, ieei_decadal=ieei_decadal,
-                ts_annual=ts_annual, ts_decadal=ts_decadal,
-                ohc_annual=ohc_annual, ohc_decadal=ohc_decadal,
-                ax=axb, colors=sns.color_palette("colorblind", n_colors=6)[3:], fontsize=14, time_dim="year",
-            )
-        else:
-            axb, axb2 = plot_ieei_ts(
-                ieei_annual=ieei_annual, ieei_decadal=ieei_decadal,
-                ts_annual=ts_annual, ts_decadal=ts_decadal,
-                ax=axb, colors=sns.color_palette("colorblind", n_colors=6)[3:], fontsize=14, time_dim="year",
-            )
-
-        ax1.set_xlim(PLOT_CONFIGS[case_label]["xlims"])
-        axb.set_xlim(PLOT_CONFIGS[case_label]["xlims"])
-        if "keep_left_axes" in PLOT_CONFIGS[case_label]:
-            if not PLOT_CONFIGS[case_label]["keep_left_axes"]:
-                ax1.set_ylabel('')
-        if "keep_right_axes" in PLOT_CONFIGS[case_label]:
-            if not PLOT_CONFIGS[case_label]["keep_right_axes"]:
-                ax2.set_ylabel('')
-                # ax3.set_ylabel('')
-        # Set y-axis limits
-        if "ax1_lims" in PLOT_CONFIGS[case_label]:
-            ax1.set_ylim(*PLOT_CONFIGS[case_label]["ax1_lims"])
-        if "ax2_lims" in PLOT_CONFIGS[case_label]:
-            ax2.set_ylim(*PLOT_CONFIGS[case_label]["ax2_lims"])
-
-        if "axb1_lims" in PLOT_CONFIGS[case_label]:
-            axb.set_ylim(*PLOT_CONFIGS[case_label]["axb1_lims"])
-        if "axb2_lims" in PLOT_CONFIGS[case_label]:
-            axb2.set_ylim(*PLOT_CONFIGS[case_label]["axb2_lims"])
-
-        if "axb1_yticks" in PLOT_CONFIGS[case_label]:
-            axb.set_yticks(PLOT_CONFIGS[case_label]["axb1_yticks"])
-        if "axb2_yticks" in PLOT_CONFIGS[case_label]:
-            axb2.set_yticks(PLOT_CONFIGS[case_label]["axb2_yticks"])
-        if "ax1_major_y" in PLOT_CONFIGS[case_label]:
-            ax1.yaxis.set_major_locator(PLOT_CONFIGS[case_label]["ax1_major_y"])
-            ax1.grid(True, alpha=0.3)
-
-        # Add a horizontal line at y=0 for the EEI subplot
-        ax2.axhline(0, color='grey', linestyle='--', linewidth=1)
-
-    fig.savefig("figures/figure3b_toprow.png", dpi=300, bbox_inches='tight')
-    logging.info("Saved figure3b_toprow.png")
-    plt.close(fig)
 
     # %%
-    PLOT_CONFIGS2 = {
-        'CESM2_WACCM_SSP2-4.5': {
-            "selfunc": lambda ds: ds['b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??'].mean("ens"),
-            "selfunc_ohc": lambda ds: ds['b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??']["OHC_global_mean"].sel(ohc_depth=-1).mean("ens") * ds['b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??'].attrs["ocean_area_m2"],
-            "ax1_lims": (236, 245),
-            "ax2_lims": (-5, 4),
-            # "axb1_lims": (0.0e24, 2.5e24),
-            "axb1_lims": (-0.5e24, 3.0e24),
-            "axb2_lims": (286.0, 293.0),
-            "xlims": (1850, 2100),
-            "keep_left_axes": True,
-            "keep_right_axes": False,
-        },
-        "ARISE-SAI": {
-            "selfunc": lambda ds: ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?'].mean("ens"),
-            "selfunc_ohc": lambda ds: ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?']["OHC_global_mean"].sel(ohc_depth=-1).mean("ens") * ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?'].attrs["ocean_area_m2"],
-            # "selfunc": lambda ds: ds['b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?'].set_index(ens="ens").sel(ens="001"),
-            "ax1_lims": (236, 245),
-            "ax2_lims": (-5, 4),
-            # "axb1_lims": (0.0e24, 2.5e24),
-            "axb1_lims": (-0.5e24, 3.0e24),
-            "axb2_lims": (286.0, 293.0),
-            "xlims": (1850, 2100),
-            "keep_left_axes": False,
-            "keep_right_axes": False,
-        },
-        "CESM2_WACCM_SSP2-4.5_MCB": {
-            "selfunc": lambda ds: ds['b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?'].mean("ens"),
-            "selfunc_ohc": lambda ds: ds['b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?']["OHC_global_mean"].sel(ohc_depth=-1).mean("ens") * ds['b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?'].attrs["ocean_area_m2"],
-            "ax1_lims": (236, 245),
-            "ax2_lims": (-5, 4),
-            # "axb1_lims": (0.0e24, 2.5e24),
-            "axb1_lims": (-0.5e24, 3.0e24),
-            "axb2_lims": (286.0, 293.0),
-            "xlims": (1850, 2100),
-            "keep_left_axes": False,
-            "keep_right_axes": True,
-        },
-    }
+    # Compute mean piControl values and a 95% confidence interval for significance testing
+    pi_ohc = ohc_dict['CESM2_WACCM_1850control']['b.e21.BW1850.f09_g17.CMIP6-piControl.001']
+    # Detrend the piControl OHC time series by removing the linear trend, which is a common practice to account for model drift in control simulations. This will help ensure that the confidence intervals reflect internal variability rather than long-term trends.
+    pi_ohc_annual = pi_ohc.groupby("time.year").mean()
+    pi_ohc_decadal = compute_decadal(pi_ohc)
+    pi_ohc_annual_branchperiod = pi_ohc_annual.sel(year=slice(50, 75))
+    pi_ohc_annual_detrended = detrend_ds(pi_ohc_annual, dim="year", deg=1)
+    pi_ohc_decadal_detrended = detrend_ds(pi_ohc_decadal, dim="year", deg=1)
+
+    # Compute uncertainty for both annual and decadal figures
+    pi_ohc_annual_std = pi_ohc_annual_detrended.std("year").assign_coords(quantile=-1).expand_dims("quantile")
+    pi_ohc_annual_quantiles = pi_ohc_annual_detrended.quantile([0.025, 0.975], dim="year")
+    pi_ohc_annual_unc = xr.concat([pi_ohc_annual_quantiles, pi_ohc_annual_std], dim="quantile")
+
+    pi_ohc_decadal_std = pi_ohc_decadal_detrended.std("year").assign_coords(quantile=-1).expand_dims("quantile")
+    pi_ohc_decadal_quantiles = pi_ohc_decadal_detrended.quantile([0.025, 0.975], dim="year")
+    pi_ohc_decadal_unc = xr.concat([pi_ohc_decadal_quantiles, pi_ohc_decadal_std], dim="quantile")
+
+    # Save the piControl OHC mean and confidence intervals to a NetCDF file for later use in plotting
+    pi_ohc_unc_all = xr.concat([pi_ohc_annual_unc, pi_ohc_decadal_unc], dim=xr.DataArray([1, 10], dims=["period"]))
+    pi_ohc_unc_all = pi_ohc_unc_all.rename({"OHC": "OHC_uncertainty", "OHC_global_mean": "OHC_global_mean_uncertainty"})
+    # Combine with the mean state as well.
+    pi_ohc_all = xr.merge([pi_ohc_unc_all, pi_ohc_annual_branchperiod])
+    # pi_ohc_all = pi_ohc_all.compute() # This kills the kernel, so this script must be run through a job.
+    # Repeat for the normal variables and save.
+
 
     # %%
-    # PLOT 2: Future scenarios (CESM2_WACCM_SSP2-4.5, ARISE-SAI, CESM2_WACCM_SSP2-4.5_MCB)
-    # Integration starts from year 1850
-    logging.info("Creating Plot 2: Future scenarios (CESM2_WACCM_SSP2-4.5, ARISE-SAI, CESM2_WACCM_SSP2-4.5_MCB)")
-    PLOT_CONFIGS = PLOT_CONFIGS2
+    # For the future scenarios, compute the average fields over the 2060-2069 period.
+    future_scenarios = ["CESM2_WACCM_SSP2-4.5", "ARISE-SAI", "CESM2_WACCM_SSP2-4.5_MCB"]
+    for scenario in future_scenarios:
+        for case_str, ds in ohc_dict[scenario].items():
+            test_period = ds.mean(dim="time")
+            # Save to the data
+            # data_dict[scenario][case_str] = ds.sel(time=slice("2060", "2069")).mean("time")
+            # data_dict[scenario][case_str] = ds.sel(time=slice("2060", "2069")).mean("time")
+            break
+        break
 
-    fig, axes = plt.subplots(2, 3, figsize=(16, 10))
-    fig.subplots_adjust(wspace=0.35)
-    
-    case_list_2 = ["CESM2_WACCM_SSP2-4.5", "ARISE-SAI", "CESM2_WACCM_SSP2-4.5_MCB"]
-    start_year_2 = 1850
-    ts_var = "TS"
-    olr_var = "FLNT"
-    asr_var = "FSNT"
-
-    for ax, axb, case_label in zip(axes[0], axes[1], case_list_2):
-        logging.info(f"Plotting case: {case_label}")
-
-        # Extract ASR and OLR data
-        selfunc = PLOT_CONFIGS[case_label].get("selfunc")
-        selfunc_ohc = PLOT_CONFIGS[case_label].get("selfunc_ohc")
-        asr_ds = selfunc(data_dict[case_label])[asr_var].sel(spatial="G")
-        olr_ds = selfunc(data_dict[case_label])[olr_var].sel(spatial="G")
-        ts_ds = selfunc(data_dict[case_label])[ts_var].sel(spatial="G")
-        ohc_ds = selfunc_ohc(ohc_dict[case_label])
-        ohc_ds = ohc_ds - ohc_ds.isel(time=0)  # Convert OHC to anomaly
-        
-        # Compute annual means
-        asr_annual = asr_ds.groupby("time.year").mean()
-        olr_annual = olr_ds.groupby("time.year").mean()
-        ts_annual = ts_ds.groupby("time.year").mean()
-        eei_annual = asr_annual - olr_annual
-        ohc_annual = ohc_ds.groupby("time.year").mean()
-
-        # Compute decadal means
-        asr_decadal = asr_ds.resample(time='10YE').mean().groupby("time.year").mean()
-        olr_decadal = olr_ds.resample(time='10YE').mean().groupby("time.year").mean()
-        ts_decadal = ts_ds.resample(time='10YE').mean().groupby("time.year").mean()
-        eei_decadal = asr_decadal - olr_decadal
-        ohc_decadal = ohc_ds.resample(time='10YE').mean().groupby("time.year").mean()
-        
-        # Compute IEEI starting from start_year_2
-        ieei_ds = compute_ieei_with_start_year(asr_ds, olr_ds, start_year_2)
-        
-        # Create annual and decadal means for IEEI by grouping years
-        ieei_annual = ieei_ds.groupby("time.year").mean()
-        ieei_decadal = ieei_ds.resample(time='10YE').mean().groupby("time.year").mean()
-
-        # Plot
-        ax1, ax2, ax3 = plot_eei_timeseries(
-            asr_annual, olr_annual, eei_annual, None,
-            asr_decadal, olr_decadal, eei_decadal, None,
-            ax=ax, fontsize=14, case_name=case_label,
-            colors=sns.color_palette("colorblind", n_colors=3),
-        )
-
-        # Plot IEEI, TS, and OHC
-        axb, axb2 = plot_ieei_ts_ohc(
-            ieei_annual=ieei_annual, ieei_decadal=ieei_decadal,
-            ts_annual=ts_annual, ts_decadal=ts_decadal,
-            ohc_annual=ohc_annual, ohc_decadal=ohc_decadal,
-            ax=axb, colors=["orange", "purple", "green"], fontsize=14, time_dim="year",
-        )
-
-        ax1.set_xlim(PLOT_CONFIGS[case_label]["xlims"])
-        axb.set_xlim(PLOT_CONFIGS[case_label]["xlims"])
-        if "keep_left_axes" in PLOT_CONFIGS[case_label]:
-            if not PLOT_CONFIGS[case_label]["keep_left_axes"]:
-                ax1.set_ylabel('')
-                axb.set_ylabel('')
-        if "keep_right_axes" in PLOT_CONFIGS[case_label]:
-            if not PLOT_CONFIGS[case_label]["keep_right_axes"]:
-                ax2.set_ylabel('')
-                axb2.set_ylabel('')
-                # ax3.set_ylabel('')
-        # Set y-axis limits
-        if "ax1_lims" in PLOT_CONFIGS[case_label]:
-            ax1.set_ylim(*PLOT_CONFIGS[case_label]["ax1_lims"])
-        if "ax2_lims" in PLOT_CONFIGS[case_label]:
-            ax2.set_ylim(*PLOT_CONFIGS[case_label]["ax2_lims"])
-
-        if "axb1_lims" in PLOT_CONFIGS[case_label]:
-            axb.set_ylim(*PLOT_CONFIGS[case_label]["axb1_lims"])
-        if "axb2_lims" in PLOT_CONFIGS[case_label]:
-            axb2.set_ylim(*PLOT_CONFIGS[case_label]["axb2_lims"])
-
-        # Add a horizontal line at y=0 for the EEI subplot
-        ax2.axhline(0, color='grey', linestyle='--', linewidth=1)
-
-    fig.savefig("figures/figure3b_bottomrow.png", dpi=300, bbox_inches='tight')
-    logging.info("Saved figure3b_bottomrow.png")
-    plt.close(fig)
     # %%

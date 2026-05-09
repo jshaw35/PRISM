@@ -297,7 +297,18 @@ def compute_decadal(
 ):
     ds_decadal = ds.resample(time='10YE', offset=pd.Timedelta(weeks=-52)).mean().groupby("time.year").mean()
     if center:
-        ds_decadal["year"] = ds_decadal["year"] + 5
+        ds_decadal["year"] = ds_decadal["year"] - 5
+    return ds_decadal
+
+
+def compute_decadal2(
+    ds,
+    center=True,
+):
+    if "time" in ds.coords:
+        ds_decadal = ds.rolling(time=120, min_periods=120, center=True).mean(dim="time").sel(time=ds["time"][::12])
+    elif "year" in ds.coords:
+        ds_decadal = ds.rolling(year=10, min_periods=10, center=True).mean(dim="year")
     return ds_decadal
 
 
