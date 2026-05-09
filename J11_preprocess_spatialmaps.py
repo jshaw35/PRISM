@@ -538,16 +538,19 @@ def detrend_dim(da, dim, deg=1):
     # detrend along a single dimension
     p = da.polyfit(dim=dim, deg=deg)
     fit = xr.polyval(da[dim], p.polyfit_coefficients)
-    return da - fit
+    detrended = da - fit
+    return detrended, p.polyfit_coefficients
 
 
 def detrend_ds(ds, dim, deg=1):
     # Detrend all variables in a dataset
     detrended_list = []
     for _var in ds.data_vars:
-        polyfit_da = detrend_dim(ds[_var], dim=dim, deg=deg)
-        polyfit_da.name = _var
-        detrended_list.append(polyfit_da)
+        detrended_da, polyfit_coefficients = detrend_dim(ds[_var], dim=dim, deg=deg)
+        detrended_da.name = _var
+        detrended_list.append(detrended_da)
+        polyfit_coefficients.name = _var + "_polyfit_coefficients"
+        detrended_list.append(polyfit_coefficients)
     detrended_ds = xr.merge(detrended_list)
 
     return detrended_ds
@@ -758,7 +761,7 @@ if __name__ == "__main__":
     future_scenarios = ["CESM2_WACCM_SSP2-4.5", "ARISE-SAI", "CESM2_WACCM_SSP2-4.5_MCB"]
     for scenario in future_scenarios:
         for case_str, ds in ohc_dict[scenario].items():
-            test_period = ds.mean(dim="time")
+            # test_period = ds.mean(dim="time")
             # Save to the data
             # data_dict[scenario][case_str] = ds.sel(time=slice("2060", "2069")).mean("time")
             # data_dict[scenario][case_str] = ds.sel(time=slice("2060", "2069")).mean("time")
