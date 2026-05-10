@@ -55,28 +55,6 @@ def shift_noleap_time_back_one_month(time_values):
     )
 
 
-def compute_IEEI(
-    olr_ds,
-    asr_ds,
-    account_for_leap: bool = False,
-):
-    """
-    Compute the integrated earth's energy imbalance (IEEI) from ASR and OLR fields.
-    """
-    assert (olr_ds["time"] == asr_ds["time"]).all(), "OLR and ASR time fields are not identical"
-    time_ds = olr_ds["time"]
-
-    weights = get_weights_by_month(time_ds, account_for_leap)
-    eei_ds = asr_ds - olr_ds
-    ieei_ds = np.cumsum(eei_ds * weights)
-
-    # Convert to Watt by multipling by the Earth's surface area
-    earth_radius = 6371e3 # meters
-    earth_SA = 4 * np.pi * earth_radius**2
-
-    return earth_SA * ieei_ds
-
-
 def get_weights_by_month(
     time_ds,
     account_for_leap: bool = False,
@@ -124,63 +102,9 @@ def get_weights_by_month(
     return weights_ds
 
 
-def crawl_and_list(input_dir, file_string):
-    file_list = []
-    for root, _, files in os.walk(input_dir):
-        for name in files:
-            if file_string in name:
-                file_list.append(os.path.join(root, name))
-    return file_list
-
-
 def crawl_and_list_glob(input_dir, file_string):
     filelist = list(Path(input_dir).glob(f"**/{file_string}"))
     return [str(file) for file in filelist]
-
-
-def compute_ieei_with_start_year(
-    asr_ds,
-    olr_ds,
-    start_year,
-    account_for_leap: bool = False,
-):
-    """
-    Compute the integrated earth's energy imbalance (IEEI) starting from a specified year.
-
-    Parameters
-    ----------
-    asr_ds : xr.DataArray
-        Absorbed shortwave radiation data
-    olr_ds : xr.DataArray
-        Outgoing longwave radiation data
-    start_year : int
-        Year to begin integration (IEEI will be zero at this year)
-    account_for_leap : bool, default False
-        Whether to account for leap years in the weighting
-
-    Returns
-    -------
-    ieei_ds : xr.DataArray
-        Integrated energy imbalance in Watts, with zero baseline at start_year
-    """
-    # Slice to start from the specified year
-    asr_sliced = asr_ds.where(asr_ds["time.year"] >= start_year, drop=True)
-    olr_sliced = olr_ds.where(olr_ds["time.year"] >= start_year, drop=True)
-
-    # Compute IEEI using the existing function
-    ieei_ds = compute_IEEI(olr_sliced, asr_sliced, account_for_leap=account_for_leap)
-
-    return ieei_ds
-
-
-def compute_decadal(
-    ds,
-    center=True,
-):
-    ds_decadal = ds.resample(time='10YE', offset=pd.Timedelta(weeks=-52)).mean().groupby("time.year").mean()
-    if center:
-        ds_decadal["year"] = ds_decadal["year"] - 5
-    return ds_decadal
 
 
 def compute_decadal2(
@@ -194,6 +118,86 @@ def compute_decadal2(
     elif "year" in ds.coords:
         ds_decadal = ds.rolling(year=10, min_periods=10, center=True).mean(dim="year")
     return ds_decadal
+
+
+def compute_picontrol_uncertainty(pi_annual, variable_names=None, branch_period=(50, 75), decadal_selection=None):
+    """
+    Compute annual and decadal uncertainty statistics from piControl annual data.
+    
+    Computes standard deviation and quantiles (0.025, 0.975) for both annual and decadal
+    averages after detrending. Returns merged dataset with uncertainty values.
+    
+    Parameters
+    ----------
+    pi_annual : xr.Dataset or xr.DataArray
+        Annual piControl data with 'year' dimension
+    variable_names : list, optional
+        List of variable names to rename with "_uncertainty" suffix. 
+        If None, applies to all variables.
+    branch_period : tuple, default (50, 75)
+        Year range to extract as representative of branch period
+    decadal_selection : slice or array-like, optional
+        Selection to apply to decadal years. If None, uses all decadal years.
+        Example: decadal_selection=slice(5, None, 10) selects every 10th year starting from 5
+    
+    Returns
+    -------
+    pi_all : xr.Dataset
+        Merged dataset containing:
+        - Uncertainty data for annual and decadal periods (quantiles and std)
+        - Mean state over the branch period
+    
+    Notes
+    -----
+    Detrends the annual data before computing statistics to remove model drift.
+    If decadal_selection is provided as a slice, applies it directly to year indices.
+    """
+    # Compute decadal from annual
+    pi_decadal = compute_decadal2(pi_annual)
+    
+    # Apply decadal selection if specified
+    if decadal_selection is not None:
+        if isinstance(decadal_selection, slice):
+            # If it's a slice, apply to indices
+            pi_decadal = pi_decadal.isel(year=decadal_selection)
+        else:
+            # If it's array-like, use it as index selection
+            pi_decadal = pi_decadal.sel(year=decadal_selection)
+    
+    # Compute annual and decadal after detrending
+    pi_annual_detrended = detrend_ds(pi_annual, dim="year", deg=1)
+    pi_decadal_detrended = detrend_ds(pi_decadal, dim="year", deg=1)
+    
+    # Compute annual uncertainty
+    pi_annual_std = pi_annual_detrended.std("year").assign_coords(quantile=-1).expand_dims("quantile")
+    pi_annual_detrended = pi_annual_detrended.chunk({"year": -1})
+    pi_annual_quantiles = pi_annual_detrended.quantile([0.025, 0.975], dim="year")
+    pi_annual_unc = xr.concat([pi_annual_quantiles, pi_annual_std], dim="quantile")
+    
+    # Compute decadal uncertainty
+    pi_decadal_std = pi_decadal_detrended.std("year").assign_coords(quantile=-1).expand_dims("quantile")
+    pi_decadal_detrended = pi_decadal_detrended.chunk({"year": -1})
+    pi_decadal_quantiles = pi_decadal_detrended.quantile([0.025, 0.975], dim="year")
+    pi_decadal_unc = xr.concat([pi_decadal_quantiles, pi_decadal_std], dim="quantile")
+    
+    # Concatenate annual and decadal along period dimension
+    pi_unc_all = xr.concat([pi_annual_unc, pi_decadal_unc], dim=xr.DataArray([1, 10], dims=["period"]))
+    
+    # Rename variables to indicate they are uncertainty measures
+    if variable_names is not None:
+        rename_dict = {var: f"{var}_uncertainty" for var in variable_names}
+    else:
+        # If no variable names provided, rename all data variables
+        rename_dict = {var: f"{var}_uncertainty" for var in pi_unc_all.data_vars}
+    pi_unc_all = pi_unc_all.rename(rename_dict)
+    
+    # Extract branch period mean state
+    pi_branch_period = pi_annual.sel(year=slice(*branch_period))
+    
+    # Merge uncertainty with the mean state
+    pi_all = xr.merge([pi_unc_all, pi_branch_period])
+    
+    return pi_all
 
 
 def extract_ensemble_numbers(filenames):
@@ -234,23 +238,6 @@ def extract_ensemble_numbers(filenames):
             logging.warning(f"Could not extract ensemble number from filename: {filename}")
     
     return ens_dict
-
-
-def get_ensemble_number_from_case_str(case_str):
-    """
-    Extract ensemble number from a case string (e.g., "b.e21.BHISTcmip6.f09_g17.LE2-1301.001" -> "001").
-    
-    Args:
-        case_str (str): Case string identifier
-    
-    Returns:
-        str: Ensemble number if found (3-digit numeric string), None otherwise
-    """
-    parts = case_str.split(".")
-    for part in parts:
-        if len(part) == 3 and part.isdigit():
-            return part
-    return None
 
 
 def match_wildcard_case(pattern, case_list):
@@ -570,18 +557,6 @@ if __name__ == "__main__":
     elif machine == "curc":
         spatial_root_dir = "/pl/active/kaygroup/jshaw/RadInt_rawdata/"
     CASE_CONFIGS1 = {
-        # "CESM2_LME": {
-        #     "path": root_dir + "data/RadInt_procdata/CESM2_LME/",
-        #     "subdir_cases": [
-        #     "b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008",
-        #     "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002",
-        #     ],
-        #     "append_cases": {
-        #         "b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008": None,
-        #         "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002": None,
-        #     },
-        #     "ufunc": None,
-        # },
         "CESM2_WACCM_1850control" :{
             "path": spatial_root_dir + "CESM2_WACCM_1850control/",
             "subdir_cases": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"],
@@ -590,18 +565,6 @@ if __name__ == "__main__":
             },
             "ufunc": None,
         },
-        # "CESM2_WACCM_HIST": {
-        #     "path": spatial_root_dir + "CESM2_WACCM_HIST/",
-        #     "subdir_cases": [
-        #         "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?",
-        #         "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001",
-        #     ],
-        #     "append_cases": {
-        #         "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?": None,
-        #         "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001": None,
-        #     },
-        #     "ufunc": None,
-        # },
         "CESM2_WACCM_SSP2-4.5": {
             "path": spatial_root_dir + "CESM2_WACCM_SSP2-4.5/",
             "subdir_cases": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??"],
@@ -653,18 +616,6 @@ if __name__ == "__main__":
         ohc_data_root = "/pl/active/kaygroup/jshaw/RadInt_ohcdata/"
     
     CASE_CONFIGS2 = {
-        # "CESM2_LME": {
-        #     "path": ohc_data_root + "CESM2_LME/",
-        #     "subdir_cases": [
-        #         "b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008",
-        #         "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002",
-        #     ],
-        #     "append_cases": {
-        #         "b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008": None,
-        #         "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002": None,
-        #     },
-        #     "ufunc": None,
-        # },
         "CESM2_WACCM_1850control" :{
             "path": ohc_data_root + "CESM2_WACCM_1850control/",
             "subdir_cases": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"],
@@ -673,18 +624,6 @@ if __name__ == "__main__":
             },
             "ufunc": None,
         },
-        # "CESM2_WACCM_HIST": {
-        #     "path": ohc_data_root + "CESM2_WACCM_HIST/",
-        #     "subdir_cases": [
-        #         "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?",
-        #         "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001",
-        #     ],
-        #     "append_cases": {
-        #         "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?": None,
-        #         "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001": None,
-        #     },
-        #     "ufunc": None,
-        # },
         "CESM2_WACCM_SSP2-4.5": {
             "path": ohc_data_root + "CESM2_WACCM_SSP2-4.5/",
             "subdir_cases": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??"],
@@ -754,30 +693,16 @@ if __name__ == "__main__":
     else:
         # Detrend the piControl OHC time series by removing the linear trend, which is a common practice to account for model drift in control simulations. This will help ensure that the confidence intervals reflect internal variability rather than long-term trends.
         pi_ohc_annual = pi_ohc.groupby("time.year").mean()
-        pi_ohc_decadal = compute_decadal2(pi_ohc_annual)
         del pi_ohc # Free memory
         pi_ohc_annual = pi_ohc_annual.compute()
-        pi_ohc_decadal = pi_ohc_decadal.sel(year=pi_ohc_decadal["year"][5::10]).compute()
-        pi_ohc_annual_branchperiod = pi_ohc_annual.sel(year=slice(50, 75))
-        pi_ohc_annual_detrended = detrend_ds(pi_ohc_annual, dim="year", deg=1)
-        pi_ohc_decadal_detrended = detrend_ds(pi_ohc_decadal, dim="year", deg=1)
-
-        # Compute uncertainty for both annual and decadal figures
-        pi_ohc_annual_std = pi_ohc_annual_detrended.std("year").assign_coords(quantile=-1).expand_dims("quantile")
-        pi_ohc_annual_detrended = pi_ohc_annual_detrended.chunk({"year":-1})
-        pi_ohc_annual_quantiles = pi_ohc_annual_detrended.quantile([0.025, 0.975], dim="year")
-        pi_ohc_annual_unc = xr.concat([pi_ohc_annual_quantiles, pi_ohc_annual_std], dim="quantile")
-
-        pi_ohc_decadal_std = pi_ohc_decadal_detrended.std("year").assign_coords(quantile=-1).expand_dims("quantile")
-        pi_ohc_decadal_detrended = pi_ohc_decadal_detrended.chunk({"year":-1})
-        pi_ohc_decadal_quantiles = pi_ohc_decadal_detrended.quantile([0.025, 0.975], dim="year")
-        pi_ohc_decadal_unc = xr.concat([pi_ohc_decadal_quantiles, pi_ohc_decadal_std], dim="quantile")
-
-        # Save the piControl OHC mean and confidence intervals to a NetCDF file for later use in plotting
-        pi_ohc_unc_all = xr.concat([pi_ohc_annual_unc, pi_ohc_decadal_unc], dim=xr.DataArray([1, 10], dims=["period"]))
-        pi_ohc_unc_all = pi_ohc_unc_all.rename({"OHC": "OHC_uncertainty", "OHC_global_mean": "OHC_global_mean_uncertainty"})
-        # Combine with the mean state as well.
-        pi_ohc_all = xr.merge([pi_ohc_unc_all, pi_ohc_annual_branchperiod])
+        
+        # Compute uncertainty using the generalized function, with decadal selection every 10 years starting from index 5
+        pi_ohc_all = compute_picontrol_uncertainty(
+            pi_ohc_annual,
+            variable_names=["OHC", "OHC_global_mean"],
+            branch_period=(50, 75),
+            decadal_selection=slice(5, None, 10)
+        )
         logging.info(f"Starting compute")
         pi_ohc_all = pi_ohc_all.compute()
         os.makedirs(save_dir, exist_ok=True)
@@ -824,30 +749,16 @@ if __name__ == "__main__":
         else:
             # Detrend the piControl time series by removing the linear trend, which is a common practice to account for model drift in control simulations. This will help ensure that the confidence intervals reflect internal variability rather than long-term trends.
             pi_annual = pi_ds.groupby("time.year").mean()
-            pi_decadal = compute_decadal2(pi_annual)
             del pi_ds # Free memory
             pi_annual = pi_annual.compute()
-            pi_decadal = pi_decadal.sel(year=pi_decadal["year"][5::10]).compute()
-            pi_annual_branchperiod = pi_annual.sel(year=slice(50, 75))
-            pi_annual_detrended = detrend_ds(pi_annual, dim="year", deg=1)
-            pi_decadal_detrended = detrend_ds(pi_decadal, dim="year", deg=1)
-
-            # Compute uncertainty for both annual and decadal figures
-            pi_annual_std = pi_annual_detrended.std("year").assign_coords(quantile=-1).expand_dims("quantile")
-            pi_annual_detrended = pi_annual_detrended.chunk({"year":-1})
-            pi_annual_quantiles = pi_annual_detrended.quantile([0.025, 0.975], dim="year")
-            pi_annual_unc = xr.concat([pi_annual_quantiles, pi_annual_std], dim="quantile")
-
-            pi_decadal_std = pi_decadal_detrended.std("year").assign_coords(quantile=-1).expand_dims("quantile")
-            pi_decadal_detrended = pi_decadal_detrended.chunk({"year":-1})
-            pi_decadal_quantiles = pi_decadal_detrended.quantile([0.025, 0.975], dim="year")
-            pi_decadal_unc = xr.concat([pi_decadal_quantiles, pi_decadal_std], dim="quantile")
-
-            # Save the piControl OHC mean and confidence intervals to a NetCDF file for later use in plotting
-            pi_unc_all = xr.concat([pi_annual_unc, pi_decadal_unc], dim=xr.DataArray([1, 10], dims=["period"]))
-            pi_unc_all = pi_unc_all.rename({var: f"{var}_uncertainty"})
-            # Combine with the mean state as well.
-            pi_all = xr.merge([pi_unc_all, pi_annual_branchperiod])
+            
+            # Compute uncertainty using the generalized function, with decadal selection every 10 years starting from index 5
+            pi_all = compute_picontrol_uncertainty(
+                pi_annual,
+                variable_names=[var],
+                branch_period=(50, 75),
+                decadal_selection=slice(5, None, 10)
+            )
             logging.info(f"Starting compute")
             pi_all = pi_all.compute()
             os.makedirs(save_dir, exist_ok=True)
