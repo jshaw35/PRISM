@@ -17,6 +17,7 @@ import matplotlib as mpl
 import seaborn as sns
 import pandas as pd
 from matplotlib.ticker import MultipleLocator
+import dask
 
 import logging
 
@@ -188,6 +189,8 @@ def compute_decadal2(
 ):
     if "time" in ds.coords:
         ds_decadal = ds.rolling(time=120, min_periods=120, center=True).mean(dim="time").sel(time=ds["time"][::12])
+        ds_decadal["time"] = ds_decadal["time.year"]
+        ds_decadal = ds_decadal.rename({"time": "year"})
     elif "year" in ds.coords:
         ds_decadal = ds.rolling(year=10, min_periods=10, center=True).mean(dim="year")
     return ds_decadal
@@ -386,13 +389,13 @@ def load_data_with_configs(CASE_CONFIGS, varlist, year_dim="time"):
                                 for ens, match_bool in zip(all_ds_ens_vals, match):
                                     if "ens" not in append_candidate.indexes:
                                         append_candidate = append_candidate.set_index(ens="ens")
-                                    if match_bool:
-                                        append_ds_ens = append_candidate.sel(ens=ens, drop=False)
-                                        logging.info(f"Appending ensemble {ens} from {append_case_label}")
-                                    else:
-                                        append_ds_ens = append_candidate.sel(ens=append_candidate_ens_vals_first, drop=False)
-                                        logging.warning(f"Ensemble {ens} not found in append case {append_case_label}. Using first available ensemble {append_candidate_ens_vals_first}.")
-                                    appended_list.append(append_ds_ens)
+                                    with dask.config.set(**{'array.slicing.split_large_chunks': True}):
+                                        if match_bool:
+                                            append_ds_ens = append_candidate.sel(ens=ens, drop=False)
+                                            logging.info(f"Appending ensemble {ens} from {append_case_label}")
+                                        else:
+                                            append_ds_ens = append_candidate.sel(ens=append_candidate_ens_vals_first, drop=False)
+                                            logging.warning(f"Ensemble {ens} not found in append case {append_case_label}. Using first available ensemble {append_candidate_ens_vals_first}.")
                                 append_ds = xr.concat(appended_list, dim="ens")
                             else:
                                 # No ens dimension in append candidate, use as-is
@@ -402,7 +405,8 @@ def load_data_with_configs(CASE_CONFIGS, varlist, year_dim="time"):
                             if "ens" in append_candidate.dims:
                                 # Append candidate has ensembles, use first but keep as dimension
                                 first_ens = append_candidate["ens"].values[0]
-                                append_ds = append_candidate.isel(ens=0, drop=False)
+                                with dask.config.set(**{'array.slicing.split_large_chunks': True}):
+                                    append_ds = append_candidate.isel(ens=0, drop=False)
                                 logging.info(f"Current case has no ensemble dimension. Using first ensemble {first_ens} from append case.")
                             else:
                                 # Neither has ensembles
@@ -410,13 +414,14 @@ def load_data_with_configs(CASE_CONFIGS, varlist, year_dim="time"):
                         
                         # Perform the append operation with time dimension selection
                         # Check if cftime.DatetimeNoLeap is being used and select time accordingly
-                        if isinstance(append_ds["time"][0].dtype, object):
-                            # Likely cftime objects, select using cftime-compatible method
-                            append_ds_subset = append_ds.sel({year_dim:slice(None, str(all_ds[year_dim][0].dt.year.values - 1))})
-                        elif isinstance(all_ds["time"].values[0], np.datetime64) or isinstance(all_ds["time"].values[0], pd.Timestamp):
-                            append_ds_subset = append_ds.sel({year_dim:slice(None, str(all_ds[year_dim][0].values - 1))})                        
-                        else:
-                            append_ds_subset = append_ds.sel({year_dim:slice(None, str(all_ds[year_dim][0].values - 1))})
+                        with dask.config.set(**{'array.slicing.split_large_chunks': True}):
+                            if isinstance(append_ds["time"][0].dtype, object):
+                                # Likely cftime objects, select using cftime-compatible method
+                                append_ds_subset = append_ds.sel({year_dim:slice(None, str(all_ds[year_dim][0].dt.year.values - 1))})
+                            elif isinstance(all_ds["time"].values[0], np.datetime64) or isinstance(all_ds["time"].values[0], pd.Timestamp):
+                                append_ds_subset = append_ds.sel({year_dim:slice(None, str(all_ds[year_dim][0].values - 1))})                        
+                            else:
+                                append_ds_subset = append_ds.sel({year_dim:slice(None, str(all_ds[year_dim][0].values - 1))})
                         
                         # Ensure ensemble dimension consistency before concatenation
                         # If one dataset has ens as an indexed dimension and the other doesn't, 
@@ -559,7 +564,11 @@ def detrend_ds(ds, dim, deg=1):
 # %%
 
 if __name__ == "__main__":
-    root_dir = "/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/"
+    machine = "curc" # "glade"
+    if machine == "glade":
+        spatial_root_dir = "/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/"
+    elif machine == "curc":
+        spatial_root_dir = "/pl/active/kaygroup/jshaw/RadInt_rawdata/"
     CASE_CONFIGS1 = {
         # "CESM2_LME": {
         #     "path": root_dir + "data/RadInt_procdata/CESM2_LME/",
@@ -574,27 +583,27 @@ if __name__ == "__main__":
         #     "ufunc": None,
         # },
         "CESM2_WACCM_1850control" :{
-            "path": root_dir + "data/RadInt_procdata/CESM2_WACCM_1850control/",
+            "path": spatial_root_dir + "CESM2_WACCM_1850control/",
             "subdir_cases": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"],
             "append_cases": {
                 "b.e21.BW1850.f09_g17.CMIP6-piControl.001": None,
             },
             "ufunc": None,
         },
-        "CESM2_WACCM_HIST": {
-            "path": root_dir + "data/RadInt_procdata/CESM2_WACCM_HIST/",
-            "subdir_cases": [
-                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?",
-                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001",
-            ],
-            "append_cases": {
-                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?": None,
-                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001": None,
-            },
-            "ufunc": None,
-        },
+        # "CESM2_WACCM_HIST": {
+        #     "path": spatial_root_dir + "CESM2_WACCM_HIST/",
+        #     "subdir_cases": [
+        #         "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?",
+        #         "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001",
+        #     ],
+        #     "append_cases": {
+        #         "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?": None,
+        #         "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001": None,
+        #     },
+        #     "ufunc": None,
+        # },
         "CESM2_WACCM_SSP2-4.5": {
-            "path": root_dir + "data/RadInt_procdata/CESM2_WACCM_SSP2-4.5/",
+            "path": spatial_root_dir + "CESM2_WACCM_SSP2-4.5/",
             "subdir_cases": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??"],
             "append_cases": {
                 "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??": None,
@@ -602,7 +611,7 @@ if __name__ == "__main__":
             "ufunc": lambda ds: ds.sel(time=slice("2060", "2069")).mean(dim="time"),
         },
         "ARISE-SAI": {
-            "path": root_dir + "data/RadInt_procdata/ARISE_SAI/",
+            "path": spatial_root_dir + "ARISE_SAI/",
             "subdir_cases": [
                 "1p5K-SAI.00?",
                 "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?",
@@ -616,7 +625,7 @@ if __name__ == "__main__":
             "ufunc": lambda ds: ds.sel(time=slice("2060", "2069")).mean(dim="time"),
         },
         "CESM2_WACCM_SSP2-4.5_MCB": {
-            "path": root_dir + "data/RadInt_procdata/CESM2_WACCM_SSP2-4.5_MCB/",
+            "path": spatial_root_dir + "CESM2_WACCM_SSP2-4.5_MCB/",
             "subdir_cases": [
                 "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?",
                 "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000",
@@ -638,7 +647,11 @@ if __name__ == "__main__":
     }
 
     # Configs for loading OHC data
-    ohc_data_root = "/glade/work/jonahshaw/PRISM_data/spatial_OHC_data/"
+    if machine == "glade":
+        ohc_data_root = "/glade/work/jonahshaw/PRISM_data/spatial_OHC_data/"
+    elif machine == "curc":
+        ohc_data_root = "/pl/active/kaygroup/jshaw/RadInt_ohcdata/"
+    
     CASE_CONFIGS2 = {
         # "CESM2_LME": {
         #     "path": ohc_data_root + "CESM2_LME/",
@@ -660,18 +673,18 @@ if __name__ == "__main__":
             },
             "ufunc": None,
         },
-        "CESM2_WACCM_HIST": {
-            "path": ohc_data_root + "CESM2_WACCM_HIST/",
-            "subdir_cases": [
-                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?",
-                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001",
-            ],
-            "append_cases": {
-                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?": None,
-                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001": None,
-            },
-            "ufunc": None,
-        },
+        # "CESM2_WACCM_HIST": {
+        #     "path": ohc_data_root + "CESM2_WACCM_HIST/",
+        #     "subdir_cases": [
+        #         "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?",
+        #         "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001",
+        #     ],
+        #     "append_cases": {
+        #         "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?": None,
+        #         "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001": None,
+        #     },
+        #     "ufunc": None,
+        # },
         "CESM2_WACCM_SSP2-4.5": {
             "path": ohc_data_root + "CESM2_WACCM_SSP2-4.5/",
             "subdir_cases": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??"],
@@ -718,49 +731,71 @@ if __name__ == "__main__":
 
     # %%
     # Load the data using the generalized loading function
-    data_varlist = ['CLDTOT', 'FLNR', 'FLNS', 'FLNSC', 'FLNT', 'FLNTC', 'FLNTCLR', 'FLUT', 'FSNR', 'FSNS', 'FSNSC', 'FSNT', 'FSNTC', 'FSNTOA', 'FSNTOAC', 'LHFLX', 'SHFLX', 'TS', "PRECT", "PRECC", "PRECL", "PRECIP_THERMO"]
+    data_varlist = ['FLNT']
+    # data_varlist = ['FLNT', 'FLNS', "FSNT", "FSNS", 'LHFLX', 'SHFLX', 'TS', "PRECT",]
+    # data_varlist = ['CLDTOT', 'FLNR', 'FLNS', 'FLNSC', 'FLNT', 'FLNTC', 'FLNTCLR', 'FLUT', 'FSNR', 'FSNS', 'FSNSC', 'FSNT', 'FSNTC', 'FSNTOA', 'FSNTOAC', 'LHFLX', 'SHFLX', 'TS', "PRECT", "PRECC", "PRECL", "PRECIP_THERMO"]
     year_dim = "time"
     ohc_varlist = ["OHC"]
 
     # Load data using the generalized function
-    # data_dict = load_data_with_configs(CASE_CONFIGS1, data_varlist, year_dim=year_dim)
+    data_dict = load_data_with_configs(CASE_CONFIGS1, data_varlist, year_dim=year_dim)
     ohc_dict = load_data_with_configs(CASE_CONFIGS2, ohc_varlist, year_dim=year_dim)
 
     # %%
-
-    # %%
     # Compute mean piControl values and a 95% confidence interval for significance testing
-    pi_ohc = ohc_dict['CESM2_WACCM_1850control']['b.e21.BW1850.f09_g17.CMIP6-piControl.001']
-    # Detrend the piControl OHC time series by removing the linear trend, which is a common practice to account for model drift in control simulations. This will help ensure that the confidence intervals reflect internal variability rather than long-term trends.
-    pi_ohc_annual = pi_ohc.groupby("time.year").mean()
-    pi_ohc_decadal = compute_decadal(pi_ohc)
-    pi_ohc_annual_branchperiod = pi_ohc_annual.sel(year=slice(50, 75))
-    pi_ohc_annual_detrended = detrend_ds(pi_ohc_annual, dim="year", deg=1)
-    pi_ohc_decadal_detrended = detrend_ds(pi_ohc_decadal, dim="year", deg=1)
+    spatial_save_root = "/home/josh2250/projects/PRISM/data/spatial_maps/"
+    pi_name = 'CESM2_WACCM_1850control'
+    pi_case = 'b.e21.BW1850.f09_g17.CMIP6-piControl.001'
+    pi_ohc = ohc_dict[pi_name][pi_case]
+    var = "OHC"
+    save_dir = Path(spatial_save_root) / pi_name
+    save_file = f"{pi_case}.{var}.spatial_uncertainty.nc"
+    save_path = save_dir / save_file
+    if os.path.exists(save_path):
+        logging.info(f"{save_path} exists. Skipping")
+    else:
+        # Detrend the piControl OHC time series by removing the linear trend, which is a common practice to account for model drift in control simulations. This will help ensure that the confidence intervals reflect internal variability rather than long-term trends.
+        pi_ohc = pi_ohc.chunk({"time": -1}) # Since remaining operations will be along the time dimension
+        pi_ohc_annual = pi_ohc.groupby("time.year").mean()
+        pi_ohc_decadal = compute_decadal2(pi_ohc)
+        pi_ohc_annual_branchperiod = pi_ohc_annual.sel(year=slice(50, 75))
+        pi_ohc_annual_detrended = detrend_ds(pi_ohc_annual, dim="year", deg=1)
+        pi_ohc_decadal_detrended = detrend_ds(pi_ohc_decadal, dim="year", deg=1)
 
-    # Compute uncertainty for both annual and decadal figures
-    pi_ohc_annual_std = pi_ohc_annual_detrended.std("year").assign_coords(quantile=-1).expand_dims("quantile")
-    pi_ohc_annual_quantiles = pi_ohc_annual_detrended.quantile([0.025, 0.975], dim="year")
-    pi_ohc_annual_unc = xr.concat([pi_ohc_annual_quantiles, pi_ohc_annual_std], dim="quantile")
+        # Compute uncertainty for both annual and decadal figures
+        pi_ohc_annual_std = pi_ohc_annual_detrended.std("year").assign_coords(quantile=-1).expand_dims("quantile")
+        pi_ohc_annual_detrended = pi_ohc_annual_detrended.chunk({"year":-1})
+        pi_ohc_annual_quantiles = pi_ohc_annual_detrended.quantile([0.025, 0.975], dim="year")
+        pi_ohc_annual_unc = xr.concat([pi_ohc_annual_quantiles, pi_ohc_annual_std], dim="quantile")
 
-    pi_ohc_decadal_std = pi_ohc_decadal_detrended.std("year").assign_coords(quantile=-1).expand_dims("quantile")
-    pi_ohc_decadal_quantiles = pi_ohc_decadal_detrended.quantile([0.025, 0.975], dim="year")
-    pi_ohc_decadal_unc = xr.concat([pi_ohc_decadal_quantiles, pi_ohc_decadal_std], dim="quantile")
+        pi_ohc_decadal_std = pi_ohc_decadal_detrended.std("year").assign_coords(quantile=-1).expand_dims("quantile")
+        pi_ohc_decadal_detrended = pi_ohc_decadal_detrended.chunk({"year":-1})
+        pi_ohc_decadal_quantiles = pi_ohc_decadal_detrended.quantile([0.025, 0.975], dim="year")
+        pi_ohc_decadal_unc = xr.concat([pi_ohc_decadal_quantiles, pi_ohc_decadal_std], dim="quantile")
 
-    # Save the piControl OHC mean and confidence intervals to a NetCDF file for later use in plotting
-    pi_ohc_unc_all = xr.concat([pi_ohc_annual_unc, pi_ohc_decadal_unc], dim=xr.DataArray([1, 10], dims=["period"]))
-    pi_ohc_unc_all = pi_ohc_unc_all.rename({"OHC": "OHC_uncertainty", "OHC_global_mean": "OHC_global_mean_uncertainty"})
-    # Combine with the mean state as well.
-    pi_ohc_all = xr.merge([pi_ohc_unc_all, pi_ohc_annual_branchperiod])
-    # pi_ohc_all = pi_ohc_all.compute() # This kills the kernel, so this script must be run through a job.
+        # Save the piControl OHC mean and confidence intervals to a NetCDF file for later use in plotting
+        pi_ohc_unc_all = xr.concat([pi_ohc_annual_unc, pi_ohc_decadal_unc], dim=xr.DataArray([1, 10], dims=["period"]))
+        pi_ohc_unc_all = pi_ohc_unc_all.rename({"OHC": "OHC_uncertainty", "OHC_global_mean": "OHC_global_mean_uncertainty"})
+        # Combine with the mean state as well.
+        pi_ohc_all = xr.merge([pi_ohc_unc_all, pi_ohc_annual_branchperiod])
+        logging.info(f"Starting compute")
+        pi_ohc_all = pi_ohc_all.compute() # This kills the kernel, so this script must be run through a job.
+        pi_ohc_all.to_netcdf(save_path)
     # Repeat for the normal variables and save.
-
 
     # %%
     # For the future scenarios, compute the average fields over the 2060-2069 period.
     future_scenarios = ["CESM2_WACCM_SSP2-4.5", "ARISE-SAI", "CESM2_WACCM_SSP2-4.5_MCB"]
     for scenario in future_scenarios:
+        save_dir = Path(spatial_save_root) / scenario
         for case_str, ds in ohc_dict[scenario].items():
+            save_file = f"{case}.{var}.spatial_20600101_20691231.nc"
+            save_path = save_dir / save_file
+            if os.path.exists(save_path):
+                logging.info(f"{save_path} exists. Skipping")
+            else:
+                logging.info(f"Saving to {save_path}")
+                ds.to_netcdf(save_path)
             # test_period = ds.mean(dim="time")
             # Save to the data
             # data_dict[scenario][case_str] = ds.sel(time=slice("2060", "2069")).mean("time")
@@ -769,3 +804,8 @@ if __name__ == "__main__":
         break
 
     # %%
+    # Generalize to apply to the ATM variables
+    atm_varlist = ['CLDTOT', 'FLNR', 'FLNS', 'FLNSC', 'FLNT', 'FLNTC', 'FLNTCLR', 'FLUT', 'FSNR', 'FSNS', 'FSNSC', 'FSNT', 'FSNTC', 'FSNTOA', 'FSNTOAC', 'LHFLX', 'SHFLX', 'TS', "PRECT", "PRECC", "PRECL", "PRECIP_THERMO"]
+    # Process each variable separately for memory reasons.
+    for var in atm_varlist:
+        var_data_dict = load_data_with_configs(CASE_CONFIGS1, [var], year_dim=year_dim)
