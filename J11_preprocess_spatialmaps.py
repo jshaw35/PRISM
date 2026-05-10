@@ -564,7 +564,7 @@ def detrend_ds(ds, dim, deg=1):
 # %%
 
 if __name__ == "__main__":
-    machine = "curc" # "glade"
+    machine = "glade" # "glade", "curc"
     if machine == "glade":
         spatial_root_dir = "/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/"
     elif machine == "curc":
@@ -730,20 +730,18 @@ if __name__ == "__main__":
     }
 
     # %%
-    # Load the data using the generalized loading function
-    data_varlist = ['FLNT']
-    # data_varlist = ['FLNT', 'FLNS', "FSNT", "FSNS", 'LHFLX', 'SHFLX', 'TS', "PRECT",]
-    # data_varlist = ['CLDTOT', 'FLNR', 'FLNS', 'FLNSC', 'FLNT', 'FLNTC', 'FLNTCLR', 'FLUT', 'FSNR', 'FSNS', 'FSNSC', 'FSNT', 'FSNTC', 'FSNTOA', 'FSNTOAC', 'LHFLX', 'SHFLX', 'TS', "PRECT", "PRECC", "PRECL", "PRECIP_THERMO"]
-    year_dim = "time"
-    ohc_varlist = ["OHC"]
-
     # Load data using the generalized function
-    data_dict = load_data_with_configs(CASE_CONFIGS1, data_varlist, year_dim=year_dim)
+    ohc_varlist = ["OHC"]
+    year_dim = "time"
     ohc_dict = load_data_with_configs(CASE_CONFIGS2, ohc_varlist, year_dim=year_dim)
 
     # %%
     # Compute mean piControl values and a 95% confidence interval for significance testing
-    spatial_save_root = "/home/josh2250/projects/PRISM/data/spatial_maps/"
+    if machine == "glade":
+        prism_root = "/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/"
+    elif machine == "curc":
+        prism_root = "/home/josh2250/projects/PRISM/"
+    spatial_save_root = prism_root + "data/spatial_maps/"
     pi_name = 'CESM2_WACCM_1850control'
     pi_case = 'b.e21.BW1850.f09_g17.CMIP6-piControl.001'
     pi_ohc = ohc_dict[pi_name][pi_case]
@@ -755,9 +753,11 @@ if __name__ == "__main__":
         logging.info(f"{save_path} exists. Skipping")
     else:
         # Detrend the piControl OHC time series by removing the linear trend, which is a common practice to account for model drift in control simulations. This will help ensure that the confidence intervals reflect internal variability rather than long-term trends.
-        pi_ohc = pi_ohc.chunk({"time": -1}) # Since remaining operations will be along the time dimension
         pi_ohc_annual = pi_ohc.groupby("time.year").mean()
-        pi_ohc_decadal = compute_decadal2(pi_ohc)
+        pi_ohc_decadal = compute_decadal2(pi_ohc_annual)
+        del pi_ohc # Free memory
+        pi_ohc_annual = pi_ohc_annual.compute()
+        pi_ohc_decadal = pi_ohc_decadal.sel(year=pi_ohc_decadal["year"][5::10]).compute()
         pi_ohc_annual_branchperiod = pi_ohc_annual.sel(year=slice(50, 75))
         pi_ohc_annual_detrended = detrend_ds(pi_ohc_annual, dim="year", deg=1)
         pi_ohc_decadal_detrended = detrend_ds(pi_ohc_decadal, dim="year", deg=1)
@@ -779,33 +779,89 @@ if __name__ == "__main__":
         # Combine with the mean state as well.
         pi_ohc_all = xr.merge([pi_ohc_unc_all, pi_ohc_annual_branchperiod])
         logging.info(f"Starting compute")
-        pi_ohc_all = pi_ohc_all.compute() # This kills the kernel, so this script must be run through a job.
+        pi_ohc_all = pi_ohc_all.compute()
+        os.makedirs(save_dir, exist_ok=True)
         pi_ohc_all.to_netcdf(save_path)
-    # Repeat for the normal variables and save.
 
     # %%
     # For the future scenarios, compute the average fields over the 2060-2069 period.
     future_scenarios = ["CESM2_WACCM_SSP2-4.5", "ARISE-SAI", "CESM2_WACCM_SSP2-4.5_MCB"]
     for scenario in future_scenarios:
         save_dir = Path(spatial_save_root) / scenario
+        os.makedirs(save_dir, exist_ok=True)
         for case_str, ds in ohc_dict[scenario].items():
-            save_file = f"{case}.{var}.spatial_20600101_20691231.nc"
+            save_file = f"{case_str}.{var}.spatial_mean2060_2069.nc"
             save_path = save_dir / save_file
             if os.path.exists(save_path):
                 logging.info(f"{save_path} exists. Skipping")
             else:
                 logging.info(f"Saving to {save_path}")
                 ds.to_netcdf(save_path)
-            # test_period = ds.mean(dim="time")
-            # Save to the data
-            # data_dict[scenario][case_str] = ds.sel(time=slice("2060", "2069")).mean("time")
-            # data_dict[scenario][case_str] = ds.sel(time=slice("2060", "2069")).mean("time")
-            break
-        break
 
     # %%
     # Generalize to apply to the ATM variables
     atm_varlist = ['CLDTOT', 'FLNR', 'FLNS', 'FLNSC', 'FLNT', 'FLNTC', 'FLNTCLR', 'FLUT', 'FSNR', 'FSNS', 'FSNSC', 'FSNT', 'FSNTC', 'FSNTOA', 'FSNTOAC', 'LHFLX', 'SHFLX', 'TS', "PRECT", "PRECC", "PRECL", "PRECIP_THERMO"]
+    if machine == "glade":
+        prism_root = "/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/"
+    elif machine == "curc":
+        prism_root = "/home/josh2250/projects/PRISM/"
+    spatial_save_root = prism_root + "data/spatial_maps/"
+    pi_name = 'CESM2_WACCM_1850control'
+    pi_case = 'b.e21.BW1850.f09_g17.CMIP6-piControl.001'
+    future_scenarios = ["CESM2_WACCM_SSP2-4.5", "ARISE-SAI", "CESM2_WACCM_SSP2-4.5_MCB"]
+
+    save_dir = Path(spatial_save_root) / pi_name
+
     # Process each variable separately for memory reasons.
     for var in atm_varlist:
         var_data_dict = load_data_with_configs(CASE_CONFIGS1, [var], year_dim=year_dim)
+        pi_ds = var_data_dict[pi_name][pi_case]
+
+        save_file = f"{pi_case}.{var}.spatial_uncertainty.nc"
+        save_path = save_dir / save_file
+        if os.path.exists(save_path):
+            logging.info(f"{save_path} exists. Skipping")
+        else:
+            # Detrend the piControl time series by removing the linear trend, which is a common practice to account for model drift in control simulations. This will help ensure that the confidence intervals reflect internal variability rather than long-term trends.
+            pi_annual = pi_ds.groupby("time.year").mean()
+            pi_decadal = compute_decadal2(pi_annual)
+            del pi_ds # Free memory
+            pi_annual = pi_annual.compute()
+            pi_decadal = pi_decadal.sel(year=pi_decadal["year"][5::10]).compute()
+            pi_annual_branchperiod = pi_annual.sel(year=slice(50, 75))
+            pi_annual_detrended = detrend_ds(pi_annual, dim="year", deg=1)
+            pi_decadal_detrended = detrend_ds(pi_decadal, dim="year", deg=1)
+
+            # Compute uncertainty for both annual and decadal figures
+            pi_annual_std = pi_annual_detrended.std("year").assign_coords(quantile=-1).expand_dims("quantile")
+            pi_annual_detrended = pi_annual_detrended.chunk({"year":-1})
+            pi_annual_quantiles = pi_annual_detrended.quantile([0.025, 0.975], dim="year")
+            pi_annual_unc = xr.concat([pi_annual_quantiles, pi_annual_std], dim="quantile")
+
+            pi_decadal_std = pi_decadal_detrended.std("year").assign_coords(quantile=-1).expand_dims("quantile")
+            pi_decadal_detrended = pi_decadal_detrended.chunk({"year":-1})
+            pi_decadal_quantiles = pi_decadal_detrended.quantile([0.025, 0.975], dim="year")
+            pi_decadal_unc = xr.concat([pi_decadal_quantiles, pi_decadal_std], dim="quantile")
+
+            # Save the piControl OHC mean and confidence intervals to a NetCDF file for later use in plotting
+            pi_unc_all = xr.concat([pi_annual_unc, pi_decadal_unc], dim=xr.DataArray([1, 10], dims=["period"]))
+            pi_unc_all = pi_unc_all.rename({var: f"{var}_uncertainty"})
+            # Combine with the mean state as well.
+            pi_all = xr.merge([pi_unc_all, pi_annual_branchperiod])
+            logging.info(f"Starting compute")
+            pi_all = pi_all.compute()
+            os.makedirs(save_dir, exist_ok=True)
+            pi_all.to_netcdf(save_path)
+
+        # For the future scenarios, compute the average fields over the 2060-2069 period.
+        for scenario in future_scenarios:
+            save_dir = Path(spatial_save_root) / scenario
+            os.makedirs(save_dir, exist_ok=True)
+            for case_str, ds in var_data_dict[scenario].items():
+                save_file = f"{case_str}.{var}.spatial_mean2060_2069.nc"
+                save_path = save_dir / save_file
+                if os.path.exists(save_path):
+                    logging.info(f"{save_path} exists. Skipping")
+                else:
+                    logging.info(f"Saving to {save_path}")
+                    ds.to_netcdf(save_path)
