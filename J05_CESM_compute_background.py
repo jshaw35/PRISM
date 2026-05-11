@@ -192,11 +192,57 @@ def compute_background_state(
     final_ds.to_netcdf(save_path)
 
 
+def compute_background_state_ohc(
+    rawdata_root,
+    save_path,
+    case_name: str,
+    pattern: list[str],
+    mask=list[int] | None,
+    tslice=None,
+):
+    label = pattern[0]
+    glob_str = pattern[1]
+    os.makedirs(save_path, exist_ok=True)
+    save_path = save_path / (case_name + ".nc")
+    if save_path.exists():
+        logging.info(f"{save_path} already exists, skipping computation for case {case_name}")
+        return
+    filepaths = list(rawdata_root.glob(glob_str))
+    if len(filepaths) < 1:
+        logging.info(f"No files found for root '{str(rawdata_root)}' and glob string '{glob_str}'")
+        return
+
+    _var = "OHC"
+    subset_filepaths = [fp for fp in filepaths if f".{_var}." in fp.name]
+    subset_filepaths.sort()  # Ensure files are in a consistent order
+    if not subset_filepaths:
+        logging.warning(f"No files found for variable {_var} in case {case_name} with pattern {glob_str}")
+        return
+    logging.info(f"Processing variable: {_var} with {len(subset_filepaths)} files for case {case_name}")
+    tmean_ds_list = []
+    for i,fp in enumerate(subset_filepaths):
+        ds = xr.open_dataset(fp)[_var]
+        # Get the time length and add it to weight the average by the number of time steps in each file later
+        time_len = ds.sizes["time"]
+        ds_tmean = ds.mean(dim="time")
+        ds_tmean = ds_tmean.assign_coords(index_t=i).expand_dims("index_t")
+        # Add a variable indexed by the new index_t dimension that contains the time length of the original dataset for weighting later
+        ds_tmean = ds_tmean.assign_coords(time_len=("index_t", [time_len]))
+        tmean_ds_list.append(ds_tmean)
+    # Compute the weighted average of the time means from each file
+    tmean_ds = xr.concat(tmean_ds_list, dim="index_t")
+    weighted_tmean = tmean_ds.weighted(tmean_ds["time_len"]).mean(dim="index_t")
+
+    weighted_tmean.to_netcdf(save_path)
+
+
 # %%
 if __name__ == "__main__":
     # If on CURC
     rawdata_root = Path("/home/josh2250/kaydata/jshaw/RadInt_rawdata/")
+    ohcdata_root = Path("/home/josh2250/kaydata/jshaw/RadInt_ohcdata/")
     save_path = Path("/home/josh2250/projects/PRISM/data/control_baselines/")
+    ohc_save_path = Path("/home/josh2250/projects/PRISM/data/control_baselines_ohc/")
 
     case_dict = {
         "CESM2_LME_control": ["b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008","CESM2_LME/d651078/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008/atm/proc/tseries/month_1/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008.cam.h0.*", None],
@@ -205,6 +251,13 @@ if __name__ == "__main__":
         "CESM2_WACCM_HIST_1850_1864": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?", "CESM2_WACCM_HIST/atm/proc/tseries/month_1/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?.cam.h0.*.nc", slice("1850", "1864")],
         "CESM2_WACCM_HIST_2000_2014": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?", "CESM2_WACCM_HIST/atm/proc/tseries/month_1/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?.cam.h0.*.nc", slice("2000", "2014")],
         "CESM2_WACCM_1850control": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001.cam.h0*", "CESM2_WACCM_1850control/atm/proc/tseries/month_1/b.e21.BW1850.f09_g17.CMIP6-piControl.001.cam.h0.*.nc", slice("0100", None)],
+    }
+
+    ohc_case_dict = {
+        "CESM2_WACCM_HIST_1850_1864": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?", "CESM2_WACCM_HIST/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?/ocn/proc/tseries/month_1/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?.pop.h.*.nc", slice("1850", "1864")],
+        "CESM2_WACCM_HIST_2000_2014": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?", "CESM2_WACCM_HIST/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?/ocn/proc/tseries/month_1/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?.pop.h.*.nc", slice("2000", "2014")],
+        "CESM2_WACCM_1850control": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001.pop.h*", "CESM2_WACCM_1850control/ocn/proc/tseries/month_1/b.e21.BW1850.f09_g17.CMIP6-piControl.001.pop.h.*.nc", slice("0100", None)],
+        "CESM2_WACCM_1850control_0050_0075": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001.pop.h*", "CESM2_WACCM_1850control/ocn/proc/tseries/month_1/b.e21.BW1850.f09_g17.CMIP6-piControl.001.pop.h.*.nc", slice("0050", "0075")],
     }
 
     # If on glade
@@ -219,9 +272,19 @@ if __name__ == "__main__":
 
     for case, pattern in case_dict.items():
         logging.info("Processing: %s, pattern: %s" % (case, pattern[0]))
-        test_out = compute_background_state(
+        _ = compute_background_state(
             rawdata_root,
             save_path,
+            case,
+            pattern,
+            tslice=pattern[2],
+        )
+
+    for case, pattern in ohc_case_dict.items():
+        logging.info("Processing: %s, pattern: %s" % (case, pattern[0]))
+        _ = compute_background_state_ohc(
+            ohcdata_root,
+            ohc_save_path,
             case,
             pattern,
             tslice=pattern[2],

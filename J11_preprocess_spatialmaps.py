@@ -153,6 +153,8 @@ def compute_picontrol_uncertainty(pi_annual, variable_names=None, branch_period=
     If decadal_selection is provided as a slice, applies it directly to year indices.
     """
     # Compute decadal from annual
+    if variable_names is not None:
+        pi_annual = pi_annual[variable_names]
     pi_decadal = compute_decadal2(pi_annual)
     
     # Apply decadal selection if specified
@@ -195,7 +197,7 @@ def compute_picontrol_uncertainty(pi_annual, variable_names=None, branch_period=
     pi_branch_period = pi_annual.sel(year=slice(*branch_period))
     
     # Merge uncertainty with the mean state
-    pi_all = xr.merge([pi_unc_all, pi_branch_period])
+    pi_all = xr.merge([pi_unc_all, pi_branch_period], compat='override')
     
     return pi_all
 
@@ -551,7 +553,7 @@ def detrend_ds(ds, dim, deg=1):
 # %%
 
 if __name__ == "__main__":
-    machine = "glade" # "glade", "curc"
+    machine = "curc" # "glade", "curc"
     if machine == "glade":
         spatial_root_dir = "/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/"
     elif machine == "curc":
@@ -680,12 +682,12 @@ if __name__ == "__main__":
         prism_root = "/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/"
     elif machine == "curc":
         prism_root = "/home/josh2250/projects/PRISM/"
-    spatial_save_root = prism_root + "data/spatial_maps/"
+    ohc_spatial_save_root = prism_root + "data/spatial_maps_ohc/"
     pi_name = 'CESM2_WACCM_1850control'
     pi_case = 'b.e21.BW1850.f09_g17.CMIP6-piControl.001'
     pi_ohc = ohc_dict[pi_name][pi_case]
     var = "OHC"
-    save_dir = Path(spatial_save_root) / pi_name
+    save_dir = Path(ohc_spatial_save_root) / pi_name
     save_file = f"{pi_case}.{var}.spatial_uncertainty.nc"
     save_path = save_dir / save_file
     if os.path.exists(save_path):
@@ -710,6 +712,7 @@ if __name__ == "__main__":
 
     # %%
     # For the future scenarios, compute the average fields over the 2060-2069 period.
+    spatial_save_root = prism_root + "data/spatial_maps_ohc/"
     future_scenarios = ["CESM2_WACCM_SSP2-4.5", "ARISE-SAI", "CESM2_WACCM_SSP2-4.5_MCB"]
     for scenario in future_scenarios:
         save_dir = Path(spatial_save_root) / scenario
@@ -735,34 +738,37 @@ if __name__ == "__main__":
     pi_case = 'b.e21.BW1850.f09_g17.CMIP6-piControl.001'
     future_scenarios = ["CESM2_WACCM_SSP2-4.5", "ARISE-SAI", "CESM2_WACCM_SSP2-4.5_MCB"]
 
-    save_dir = Path(spatial_save_root) / pi_name
-
     # Process each variable separately for memory reasons.
     for var in atm_varlist:
+        logging.info(f"Processing {var}")
         var_data_dict = load_data_with_configs(CASE_CONFIGS1, [var], year_dim=year_dim)
-        pi_ds = var_data_dict[pi_name][pi_case]
-
-        save_file = f"{pi_case}.{var}.spatial_uncertainty.nc"
-        save_path = save_dir / save_file
-        if os.path.exists(save_path):
-            logging.info(f"{save_path} exists. Skipping")
+        if not pi_case in var_data_dict[pi_name].keys():
+            logging.info(f"{pi_case} not found")
         else:
-            # Detrend the piControl time series by removing the linear trend, which is a common practice to account for model drift in control simulations. This will help ensure that the confidence intervals reflect internal variability rather than long-term trends.
-            pi_annual = pi_ds.groupby("time.year").mean()
-            del pi_ds # Free memory
-            pi_annual = pi_annual.compute()
-            
-            # Compute uncertainty using the generalized function, with decadal selection every 10 years starting from index 5
-            pi_all = compute_picontrol_uncertainty(
-                pi_annual,
-                variable_names=[var],
-                branch_period=(50, 75),
-                decadal_selection=slice(5, None, 10)
-            )
-            logging.info(f"Starting compute")
-            pi_all = pi_all.compute()
-            os.makedirs(save_dir, exist_ok=True)
-            pi_all.to_netcdf(save_path)
+            pi_ds = var_data_dict[pi_name][pi_case]
+
+            save_dir = Path(spatial_save_root) / pi_name
+            save_file = f"{pi_case}.{var}.spatial_uncertainty.nc"
+            save_path = save_dir / save_file
+            if os.path.exists(save_path):
+                logging.info(f"{save_path} exists. Skipping")
+            else:
+                # Detrend the piControl time series by removing the linear trend, which is a common practice to account for model drift in control simulations. This will help ensure that the confidence intervals reflect internal variability rather than long-term trends.
+                pi_annual = pi_ds.groupby("time.year").mean()
+                del pi_ds # Free memory
+                pi_annual = pi_annual.compute()
+                
+                # Compute uncertainty using the generalized function, with decadal selection every 10 years starting from index 5
+                pi_all = compute_picontrol_uncertainty(
+                    pi_annual,
+                    variable_names=[var],
+                    branch_period=(50, 75),
+                    decadal_selection=slice(5, None, 10)
+                )
+                logging.info(f"Starting compute")
+                pi_all = pi_all.compute()
+                os.makedirs(save_dir, exist_ok=True)
+                pi_all.to_netcdf(save_path)
 
         # For the future scenarios, compute the average fields over the 2060-2069 period.
         for scenario in future_scenarios:
