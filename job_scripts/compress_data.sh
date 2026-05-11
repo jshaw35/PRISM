@@ -92,6 +92,13 @@ else
     echo "${FILE} already exists"
 fi
 
+FILE=../zipped_data/control_baselines_ohc.zip
+if [ ! -e ${FILE} ]; then 
+    zip -r ${FILE} control_baselines_ohc
+else
+    echo "${FILE} already exists"
+fi
+
 # NMSE components
 FILE=../zipped_data/CESM2_1850control_error_components.zip
 if [ ! -e ${FILE} ]; then 
@@ -138,6 +145,84 @@ fi
 FILE=../zipped_data/CESM2_WACCM_HIST_2000_2014_error_components.zip
 if [ ! -e ${FILE} ]; then 
     zip -r ${FILE} error_relativetobaseline/CESM2_WACCM_HIST_2000_2014
+else
+    echo "${FILE} already exists"
+fi
+
+# Spatial map data
+# FILE=../zipped_data/CESM2_WACCM_1850control_spatialdata.zip
+# if [ ! -e ${FILE} ]; then 
+#     zip -r ${FILE} spatial_maps/CESM2_WACCM_1850control
+# else
+#     echo "${FILE} already exists"
+# fi
+
+FILE=../zipped_data/CESM2_WACCM_1850control_spatialdata1.zip
+if [ ! -e ${FILE} ]; then 
+    zip -r ${FILE} spatial_maps/CESM2_WACCM_1850control/*.FL*.*
+else
+    echo "${FILE} already exists"
+fi
+
+FILE=../zipped_data/CESM2_WACCM_1850control_spatialdata3.zip
+if [ ! -e ${FILE} ]; then 
+    zip -r ${FILE} spatial_maps/CESM2_WACCM_1850control/*.FS*.*
+else
+    echo "${FILE} already exists"
+fi
+
+FILE=../zipped_data/CESM2_WACCM_1850control_spatialdata2.zip
+if [ ! -e ${FILE} ]; then 
+    zip -r ${FILE} spatial_maps/CESM2_WACCM_1850control/b.e21.BW1850.f09_g17.CMIP6-piControl.001.CLDTOT.spatial_uncertainty.nc spatial_maps/CESM2_WACCM_1850control/b.e21.BW1850.f09_g17.CMIP6-piControl.001.LHFLX.spatial_uncertainty.nc spatial_maps/CESM2_WACCM_1850control/b.e21.BW1850.f09_g17.CMIP6-piControl.001.PRECIP_THERMO.spatial_uncertainty.nc spatial_maps/CESM2_WACCM_1850control/b.e21.BW1850.f09_g17.CMIP6-piControl.001.PRECT.spatial_uncertainty.nc spatial_maps/CESM2_WACCM_1850control/b.e21.BW1850.f09_g17.CMIP6-piControl.001.SHFLX.spatial_uncertainty.nc spatial_maps/CESM2_WACCM_1850control/b.e21.BW1850.f09_g17.CMIP6-piControl.001.TS.spatial_uncertainty.nc
+else
+    echo "${FILE} already exists"
+fi
+
+FILE=../zipped_data/CESM2_WACCM_1850control_spatialdata_ohc.zip
+if [ ! -e ${FILE} ]; then 
+    zip -r ${FILE} spatial_maps_ohc/CESM2_WACCM_1850control
+else
+    echo "${FILE} already exists"
+fi
+
+FILE=../zipped_data/CESM2_WACCM_SSP2-4.5_spatialdata.zip
+if [ ! -e ${FILE} ]; then 
+    zip -r ${FILE} spatial_maps/CESM2_WACCM_SSP2-4.5
+else
+    echo "${FILE} already exists"
+fi
+
+FILE=../zipped_data/CESM2_WACCM_SSP2-4.5_spatialdata_ohc.zip
+if [ ! -e ${FILE} ]; then 
+    zip -r ${FILE} spatial_maps_ohc/CESM2_WACCM_SSP2-4.5
+else
+    echo "${FILE} already exists"
+fi
+
+FILE=../zipped_data/ARISE-SAI_spatialdata.zip
+if [ ! -e ${FILE} ]; then 
+    zip -r ${FILE} spatial_maps/ARISE-SAI
+else
+    echo "${FILE} already exists"
+fi
+
+FILE=../zipped_data/ARISE-SAI_spatialdata_ohc.zip
+if [ ! -e ${FILE} ]; then 
+    zip -r ${FILE} spatial_maps_ohc/ARISE-SAI
+else
+    echo "${FILE} already exists"
+fi
+
+FILE=../zipped_data/CESM2_WACCM_SSP2-4.5_MCB_spatialdata.zip
+if [ ! -e ${FILE} ]; then 
+    zip -r ${FILE} spatial_maps/CESM2_WACCM_SSP2-4.5_MCB
+else
+    echo "${FILE} already exists"
+fi
+
+FILE=../zipped_data/CESM2_WACCM_SSP2-4.5_MCB_spatialdata_ohc.zip
+if [ ! -e ${FILE} ]; then 
+    zip -r ${FILE} spatial_maps_ohc/CESM2_WACCM_SSP2-4.5_MCB
 else
     echo "${FILE} already exists"
 fi

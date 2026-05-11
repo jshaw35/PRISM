@@ -71,6 +71,8 @@ def compute_error_decomposition(
     control_ds: xr.Dataset,
     var_detect_str: str = "h0",
     time_fcn: callable = lambda da: da.groupby("time.year").mean("time"),
+    spatial_dims: list[str] = None,
+    weights: xr.DataArray = None,
 ):
     """Compute the error decomposition per Medeiros (2023) and Simpson et al. (2020) weighting by np.cos(np.deg2rad(ds["lat"])).
 
@@ -93,6 +95,7 @@ def compute_error_decomposition(
     test_var = name_parts[marker_idx + 1]
     if test_var not in control_ds.data_vars:
         logging.error(f"Variable {test_var} not found in control dataset.")
+        logging.info(f"control_ds.data_vars: {control_ds.data_vars}")
         return None
 
     test_da = xr.open_dataset(test_path)[test_var]
@@ -105,12 +108,19 @@ def compute_error_decomposition(
     control_da = control_ds[test_var]
 
     # Compute decomposition per time step over spatial dimensions with area weighting.
-    spatial_dims = [d for d in test_da.dims if d not in ["time", "year"]]
-    lat_dim = "lat" if "lat" in test_da.dims else ("latitude" if "latitude" in test_da.dims else None)
-    if lat_dim is None:
-        raise ValueError("Expected a latitude dimension named 'lat' or 'latitude'.")
+    if spatial_dims is None:
+        spatial_dims = [d for d in test_da.dims if d not in ["time", "year"]]
+    else:
+        logging.info(f"Using user-supplied spatial_dims: {spatial_dims}")
 
-    weights = np.cos(np.deg2rad(test_da[lat_dim]))
+    if weights is None:
+        lat_dim = "lat" if "lat" in test_da.dims else ("latitude" if "latitude" in test_da.dims else None)
+        if lat_dim is None:
+            raise ValueError("Expected a latitude dimension named 'lat' or 'latitude'.")
+        weights = np.cos(np.deg2rad(test_da[lat_dim]))
+    else:
+        logging.info(f"Using user-supplied weights over dims: {weights.dims}.")
+
     valid = np.isfinite(test_da) & np.isfinite(control_da)
     m = test_da.where(valid) # test is the "model", m 
     o = control_da.where(valid) # control is the "observations", o
@@ -222,22 +232,6 @@ if __name__ == "__main__":
         "CESM2_WACCM_HIST": f"{str(rawdata_loadpath)}/CESM2_WACCM_HIST/",
     }
 
-    # # Glade test paths
-    # control_loadpath = Path("/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/data/control_baselines/")
-    # rawdata_loadpath = Path("/gdex/data/")
-    # save_path = Path("/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/data/error_relativetobaseline/")
-
-    # # Keys are the controls and the values are lists of cases to compare to that control.
-    # compare_cases = {
-    #     "CESM2_LME_control": ["CESM2_LME"],
-    #     "CESM2_1850control": ["CESM2_1850control", "CESM2_LE", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"]
-    # }
-    # # Keys are the cases to compare and the values are the paths to the files to compare.
-    # compare_paths = {
-    #     "CESM2_LME": f"{str(rawdata_loadpath)}/d651078/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002/atm/proc/tseries/month_1/",
-    # }
-
-    # %%
     for control_case in compare_cases:
         logging.info(f"Processing case: {control_case}")
         control_path = str(control_loadpath) + "/" + control_case + ".nc"
@@ -252,10 +246,50 @@ if __name__ == "__main__":
                 compute_error_decomposition,
                 control_ds=control_ds,
                 time_fcn=lambda da: da.groupby("time.year").mean("time"), # Annual averages
-                # time_fcn=lambda da: da.resample(time='10YE', offset=pd.Timedelta(weeks=-52)).mean().groupby("time.year").mean(), # Decadal averages, but doesn't play well with file edges
             )
-            # break
-        # break
+    # %%
+    # Compute bias for OHC
+    # CURC paths
+    control_loadpath_ohc = Path("/home/josh2250/projects/PRISM/data/control_baselines_ohc/")
+    ohcdata_loadpath = Path("/home/josh2250/kaydata/jshaw/RadInt_ohcdata/")
+    save_path_ohc = Path("/home/josh2250/projects/PRISM/data/error_relativetobaseline/")
+
+    # Keys are the controls and the values are lists of cases to compare to that control.
+    compare_cases_ohc = {
+        "CESM2_WACCM_1850control": ["CESM2_WACCM_1850control", "CESM2_WACCM_HIST", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
+        "CESM2_WACCM_HIST_2000_2014": ["CESM2_WACCM_1850control", "CESM2_WACCM_HIST", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
+        "CESM2_WACCM_HIST_1850_1864": ["CESM2_WACCM_1850control", "CESM2_WACCM_HIST", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
+    }
+
+    compare_paths_ohc = {
+        "ARISE_SAI": f"{str(ohcdata_loadpath)}/ARISE_SAI/",
+        "CESM2_WACCM_SSP2-4.5": f"{str(ohcdata_loadpath)}/CESM2_WACCM_SSP2-4.5/",
+        "CESM2_WACCM_SSP2-4.5_MCB": f"{str(ohcdata_loadpath)}/CESM2_WACCM_SSP2-4.5_MCB/",
+        "CESM2_WACCM_1850control": f"{str(ohcdata_loadpath)}/CESM2_WACCM_1850control/",
+        "CESM2_WACCM_HIST": f"{str(ohcdata_loadpath)}/CESM2_WACCM_HIST/",
+    }
+    ohc_ancillary_ds = xr.open_dataset(ohcdata_loadpath / "ancillary_files/ohc_ancillary_data.nc")
+    pop_weights = ohc_ancillary_ds["TAREA"]
+
+    for control_case in compare_cases_ohc:
+        logging.info(f"Processing case: {control_case}")
+        control_path = str(control_loadpath_ohc) + "/" + control_case + ".nc"
+        control_ds = xr.open_dataset(control_path)
+        for compare_case in compare_cases_ohc[control_case]:
+            logging.info(f"Comparing to case: {compare_case}")
+            input_dir = compare_paths_ohc[compare_case]
+            
+            crawl_and_process2(
+                input_dir,
+                save_path_ohc / control_case / compare_case,
+                compute_error_decomposition,
+                control_ds=control_ds,
+                time_fcn=lambda da: da.groupby("time.year").mean("time"), # Annual averages
+                var_detect_str="h",
+                spatial_dims=["nlat", "nlon"],
+                weights=pop_weights,
+            )
+
     # %%
 # import matplotlib.pyplot as plt
 # test_path = "data/error_relativetobaseline/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002.cam.h0.CLDTOT.170001-174912.nc"
