@@ -44,29 +44,21 @@ def shift_noleap_time_back_one_month(time_values):
     )
 
 
-def compute_IEEI(
-    olr_ds,
-    asr_ds,
+def weighted_annualmean(
+    ds,
     account_for_leap: bool = False,
 ):
     """
-    Compute the integrated earth's energy imbalance (IEEI) from ASR and OLR fields.
+    Compute an appropriately weighted annual mean accounting for the days in each month.
     """
-    assert (olr_ds["time"] == asr_ds["time"]).all(), "OLR and ASR time fields are not identical"
-    time_ds = olr_ds["time"]
+    assert("time" in ds.coords), "Dataset must have a time coordinate"
 
-    weights = get_weights_by_month(time_ds, account_for_leap)
-    eei_ds = asr_ds - olr_ds
-    ieei_ds = np.cumsum(eei_ds * weights)
+    ds_weightedannual = ds.groupby("time.year").map(lambda x: x.weighted(get_weights_by_month2(x["time"], account_for_leap)).mean(dim="time"))
 
-    # Convert to Watt by multipling by the Earth's surface area
-    earth_radius = 6371e3 # meters
-    earth_SA = 4 * np.pi * earth_radius**2
-
-    return earth_SA * ieei_ds
+    return ds_weightedannual
 
 
-def get_weights_by_month(
+def get_weights_by_month2(
     time_ds,
     account_for_leap: bool = False,
 ):
@@ -91,26 +83,27 @@ def get_weights_by_month(
         }
     )
 
-    time_weights = []
-    if account_for_leap == False:
-        for _t in time_ds:
-            time_weights.append(weights.sel(month=_t['time.month']))
-    else:
-        for _t in time_ds:
-            if _t["time.year"] % 4 == 0:
-                time_weights.append(weights_leap.sel(month=_t['time.month']))
-            else:
-                time_weights.append(weights.sel(month=_t['time.month']))
+    month_values = time_ds.dt.month
+    year_values = time_ds.dt.year
 
-    # Duplicate the time dimension but with weights as values
-    weights_ds = xr.DataArray(
-        data=time_weights,
-        dims="time",
-        coords={
-            "time":time_ds,
-        },
-    )
-    return weights_ds
+    # Vectorized selection of the appropriate weights for each time point
+    if account_for_leap:
+        weights = xr.where((year_values % 4 == 0), weights_leap.sel(month=month_values), weights.sel(month=month_values))
+    else:
+        weights = weights.sel(month=month_values)
+    return weights
+
+
+def compute_decadal2(
+    ds,
+    center=True,
+):
+    if "time" in ds.coords:
+        ds_annual = weighted_annualmean(ds)
+        ds_decadal = ds_annual.rolling(year=10, min_periods=10, center=True).mean(dim="year")
+    elif "year" in ds.coords:
+        ds_decadal = ds.rolling(year=10, min_periods=10, center=True).mean(dim="year")
+    return ds_decadal
 
 
 def plot_eei(
@@ -158,6 +151,12 @@ if __name__ == "__main__":
         "CESM2-LME": {
             "path": "data/RadInt_procdata/CESM2_LME/",
             "case_str": "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002",
+            "append_case": None,
+            "ufunc": None,
+        },
+        "CESM2_WACCM_1850control" :{
+            "path": "data/RadInt_procdata/CESM2_WACCM_1850control/",
+            "case_str": "b.e21.BW1850.f09_g17.CMIP6-piControl.001",
             "append_case": None,
             "ufunc": None,
         },
@@ -249,12 +248,12 @@ if __name__ == "__main__":
             "cbar_ticks": np.arange(850, 1851, 100),
             "cbar_ylabel": None,
         },
-        # "CESM2-LE": {
-        #     "ylims": (230, 237),
-        #     "xlims": (230, 237),
-        #     "cbar_ticks": np.arange(1850, 2016, 10),
-        #     "cbar_ylabel": None,
-        # },
+        "CESM2_WACCM_1850control" :{
+            "ylims": (236, 244),
+            "xlims": (236, 244),
+            "cbar_ticks": np.arange(0, 501, 50),
+            "cbar_ylabel": None,
+        },
         "CESM2-WACCM-HIST": {
             "ylims": (230, 237),
             "xlims": (230, 237),
@@ -291,43 +290,44 @@ if __name__ == "__main__":
     # Plot the CESM LME and CESM2 LME data annually and decadally for the global mean in a 1x3 subplot grid
     fig,axs = plt.subplots(1,2, figsize=(12,4.5))
     fig.subplots_adjust(wspace=0.35)
-    # caxes = [fig.add_axes([0.46, 0.15, 0.01, 0.7]), fig.add_axes([0.92, 0.15, 0.01, 0.7])] # create separate colorbar axes for each subplot
-    cax = fig.add_axes([0.92, 0.15, 0.01, 0.7]) # create separate colorbar axes for each subplot
-    caxes = [cax, cax]
+    caxes = [fig.add_axes([0.46, 0.15, 0.01, 0.7]), fig.add_axes([0.92, 0.15, 0.01, 0.7])] # create separate colorbar axes for each subplot
+    # cax = fig.add_axes([0.92, 0.15, 0.01, 0.7]) # create separate colorbar axes for each subplot
+    # caxes = [cax, cax]
     outs_list = []
-    case_list = ["CESM-LME", "CESM2-LME"]
+    # case_list = ["CESM-LME", "CESM2-LME"]
+    case_list = ["CESM2_WACCM_1850control", "CESM2-LME"]
     add_colorbar = {
         "CESM-LME": True,
-        "CESM2-LME": False,
+        "CESM2-LME": True,
+        "CESM2_WACCM_1850control": True,
+    }
+    year_steps = {
+        "CESM-LME": 20,
+        "CESM2-LME": 20,
+        "CESM2_WACCM_1850control": 20,
+    }
+    tick_steps = {
+        "CESM-LME": 100,
+        "CESM2-LME": 100,
+        "CESM2_WACCM_1850control": 50,
     }
     cmap = sns.color_palette("viridis", as_cmap=True)
 
-    year_step = 20
-    tick_step = 100
-    year_min = min([*[PLOT_CONFIGS[i]["cbar_ticks"][0] for i in case_list]])
-    year_max = max([*[PLOT_CONFIGS[i]["cbar_ticks"][-1] for i in case_list]])
-    year_bounds = np.arange(year_min, year_max + 1, year_step)
-    cbar_ticks = np.arange(year_min, year_max + 1, tick_step)
-
-    min_val = min(PLOT_CONFIGS[case_label]["xlims"][0], PLOT_CONFIGS[case_label]["ylims"][0])
-    max_val = min(PLOT_CONFIGS[case_label]["xlims"][1], PLOT_CONFIGS[case_label]["ylims"][1])
-
-    norm = mpl.colors.BoundaryNorm(year_bounds, cmap.N, extend='neither')
-
     for ax, cax, case_label in zip(axs, caxes, case_list):
         logging.info(f"Plotting case: {case_label}")
-        # cax = ax.inset_axes([1.02, 0.15, 0.02, 0.7])
-        olr_ds = data_dict[case_label][olr_var]
-        asr_ds = data_dict[case_label][asr_var]
+        olr_ds = data_dict[case_label][olr_var].compute()
+        asr_ds = data_dict[case_label][asr_var].compute()
 
         # Compute annual means for ASR and OLR
-        asr_annual = asr_ds.sel(spatial="G").groupby("time.year").mean()
-        olr_annual = olr_ds.sel(spatial="G").groupby("time.year").mean()
+        asr_annual = weighted_annualmean(asr_ds.sel(spatial="G"))
+        olr_annual = weighted_annualmean(olr_ds.sel(spatial="G"))
 
         # Compute decadal means for ASR and OLR and set time coordinate to the first year in the decade
-        asr_decadal = asr_ds.sel(spatial="G").resample(time='10YE').mean().groupby("time.year").mean()
-        olr_decadal = olr_ds.sel(spatial="G").resample(time='10YE').mean().groupby("time.year").mean()
+        asr_decadal = compute_decadal2(asr_ds.sel(spatial="G"))[5::10]
+        olr_decadal = compute_decadal2(olr_ds.sel(spatial="G"))[5::10]
 
+        year_bounds = [PLOT_CONFIGS[case_label]["cbar_ticks"][0], PLOT_CONFIGS[case_label]["cbar_ticks"][-1]]
+        norm = mpl.colors.BoundaryNorm(PLOT_CONFIGS[case_label]["cbar_ticks"], cmap.N, extend='neither')
         outs1 = plot_radiative_imbalance_annual(
             olr_annual,
             asr_annual,
@@ -363,7 +363,6 @@ if __name__ == "__main__":
         # Add 1-1 lines over the new domain
         min_val = min(PLOT_CONFIGS[case_label]["xlims"][0], PLOT_CONFIGS[case_label]["ylims"][0])
         max_val = min(PLOT_CONFIGS[case_label]["xlims"][1], PLOT_CONFIGS[case_label]["ylims"][1])
-        # max_val = max(olr_da.max(), asr_da.max())
         ax.plot(
             [min_val, max_val],
             [min_val, max_val],
@@ -371,11 +370,9 @@ if __name__ == "__main__":
             linestyle="--",
             zorder=0,
         )
-    cbar = outs_list[0][-1][-1]
-    cbar.set_ticks(cbar_ticks)
 
-    fig.savefig("figures/figure1_toprow.png", dpi=300, bbox_inches='tight')
-    logging.info("Saved figure1_toprow.png")
+    fig.savefig("figures/figure1b_toprow.png", dpi=300, bbox_inches='tight')
+    logging.info("Saved figure1b_toprow.png")
     plt.close(fig)
 
     # %%
@@ -411,17 +408,16 @@ if __name__ == "__main__":
 
     for ax, cax, case_label in zip(axs, caxes, case_list):
         logging.info(f"Plotting case: {case_label}")
-        # cax = ax.inset_axes([1.02, 0.15, 0.02, 0.7])
-        olr_ds = data_dict[case_label][olr_var]
-        asr_ds = data_dict[case_label][asr_var]
+        olr_ds = data_dict[case_label][olr_var].compute()
+        asr_ds = data_dict[case_label][asr_var].compute()
 
         # Compute annual means for ASR and OLR
-        asr_annual = asr_ds.sel(spatial="G").groupby("time.year").mean()
-        olr_annual = olr_ds.sel(spatial="G").groupby("time.year").mean()
+        asr_annual = weighted_annualmean(asr_ds.sel(spatial="G"))
+        olr_annual = weighted_annualmean(olr_ds.sel(spatial="G"))
 
         # Compute decadal means for ASR and OLR and set time coordinate to the first year in the decade
-        asr_decadal = asr_ds.sel(spatial="G").resample(time='10YE').mean().groupby("time.year").mean()
-        olr_decadal = olr_ds.sel(spatial="G").resample(time='10YE').mean().groupby("time.year").mean()
+        asr_decadal = compute_decadal2(asr_ds.sel(spatial="G"))[5::10]
+        olr_decadal = compute_decadal2(olr_ds.sel(spatial="G"))[5::10]
 
         outs1 = plot_radiative_imbalance_annual(
             olr_annual,
@@ -473,289 +469,3 @@ if __name__ == "__main__":
     plt.close(fig)
 
     # %%
-    # Plot the LME data annually and decadally for the global mean
-    asr_data = data_dict['CESM-LME'][asr_var].sel(spatial="G")
-    olr_data = data_dict['CESM-LME'][olr_var].sel(spatial="G")
-
-    # Compute annual means for ASR and OLR
-    asr_annual = asr_data.groupby("time.year").mean()
-    olr_annual = olr_data.groupby("time.year").mean()
-
-    # Compute decadal means for ASR and OLR and set time coordinate to the first year in the decade
-    asr_decadal = asr_data.resample(time='10YE').mean().groupby("time.year").mean()
-    olr_decadal = olr_data.resample(time='10YE').mean().groupby("time.year").mean()
-    fig,ax = plt.subplots(1,1,figsize=(7,5))
-    cax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
-    plot_radiative_imbalance_annual(
-        olr_annual,
-        asr_annual,
-        ax=ax,
-        cax=cax,
-        plot_kwargs={"s": 5, "alpha": 0.5},
-        connected=False,
-        line11=False,
-    )
-    plot_radiative_imbalance_annual(
-        olr_decadal,
-        asr_decadal,
-        ax=ax,
-        cax=cax,
-        plot_kwargs={"s": 50, "facecolors": "none", "edgecolors": "black"},
-        connected=False,
-        line11=False,
-    )
-    ax.set_xlim(226, None)
-
-    # %%
-    # Plot the SSP2-4.5 data annually and decadally for the global mean
-    asr_data = data_dict['CESM2-SSP2-4.5'][asr_var].sel(spatial="G")
-    olr_data = data_dict['CESM2-SSP2-4.5'][olr_var].sel(spatial="G")
-
-    # Compute annual means for ASR and OLR
-    asr_annual = asr_data.groupby("time.year").mean()
-    olr_annual = olr_data.groupby("time.year").mean()
-
-    # Compute decadal means for ASR and OLR and set time coordinate to the first year in the decade
-    asr_decadal = asr_data.resample(time='10YE').mean().groupby("time.year").mean()
-    olr_decadal = olr_data.resample(time='10YE').mean().groupby("time.year").mean()
-    fig,ax = plt.subplots(1,1,figsize=(7,5))
-    cax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
-    plot_radiative_imbalance_annual(
-        olr_annual,
-        asr_annual,
-        ax=ax,
-        cax=cax,
-        plot_kwargs={"s": 5, "alpha": 0.5},
-        connected=False,
-    )
-    plot_radiative_imbalance_annual(
-        olr_decadal,
-        asr_decadal,
-        ax=ax,
-        cax=cax,
-        plot_kwargs={"s": 50, "facecolors": "none", "edgecolors": "black"},
-        connected=False,
-    )
-
-    # %%
-    # Plot the ARISE-SAI data annually and decadally for the global mean
-    asr_data = data_dict["ARISE-SAI"][asr_var].sel(spatial="G")
-    olr_data = data_dict["ARISE-SAI"][olr_var].sel(spatial="G")
-
-    # Compute annual means for ASR and OLR
-    asr_annual = asr_data.groupby("time.year").mean()
-    olr_annual = olr_data.groupby("time.year").mean()
-
-    # Compute decadal means for ASR and OLR and set time coordinate to the first year in the decade
-    asr_decadal = asr_data.resample(time='10YE').mean().groupby("time.year").mean()
-    olr_decadal = olr_data.resample(time='10YE').mean().groupby("time.year").mean()
-    fig,ax = plt.subplots(1,1,figsize=(7,5))
-    cax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
-    plot_radiative_imbalance_annual(
-        olr_annual,
-        asr_annual,
-        ax=ax,
-        cax=cax,
-        plot_kwargs={"s": 5, "alpha": 0.5},
-        connected=False,
-    )
-    plot_radiative_imbalance_annual(
-        olr_decadal,
-        asr_decadal,
-        ax=ax,
-        cax=cax,
-        plot_kwargs={"s": 50, "facecolors": "none", "edgecolors": "black"},
-        connected=False,
-    )
-    # ax.set_xlim(226, None)
-
-
-    # %%
-    for case_label in case_labels:
-        logging.info(f"Plotting case: {case_label}")
-        olr_ds = data_dict[case_label][olr_var]
-        asr_ds = data_dict[case_label][asr_var]
-        ts_ds = data_dict[case_label][ts_var]
-
-        # Handle the CESM time coordinate issue and challenges with cftime.DatetimeNoLeap
-        asr_ds = asr_ds.assign_coords(
-            time=shift_noleap_time_back_one_month(asr_ds["time"].values)
-        )
-        olr_ds = olr_ds.assign_coords(
-            time=shift_noleap_time_back_one_month(olr_ds["time"].values)
-        )
-        ts_ds = ts_ds.assign_coords(
-            time=shift_noleap_time_back_one_month(ts_ds["time"].values)
-        )
-
-        fig, axs = plt.subplots(1, 3, figsize=(12, 4))
-        plot_radiative_imbalance(
-            olr_ds.sel(spatial="G").compute(),
-            asr_ds.sel(spatial="G").compute(),
-            ax=axs[0],
-        )
-        plot_radiative_imbalance(
-            olr_ds[olr_var].sel(spatial="SH").compute(),
-            asr_ds[asr_var].sel(spatial="SH").compute(),
-            ax=axs[1],
-        )
-        plot_radiative_imbalance(
-            olr_ds[olr_var].sel(spatial="NH").compute(),
-            asr_ds[asr_var].sel(spatial="NH").compute(),
-            ax=axs[2],
-        )
-        break
-        fig1.savefig("figures/testfig.png")
-        #
-        break
-    # %%
-fontsize = 14
-fig, axs = plt.subplots(1, 3, figsize=(12, 4))
-cax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
-plot_radiative_imbalance(
-    olr_ds[olr_var].sel(spatial="G").compute(),
-    asr_ds[asr_var].sel(spatial="G").compute(),
-    ax=axs[0],
-    cax=cax,
-    plot_kwargs={"s": 5},
-    connected=False,
-)
-plot_radiative_imbalance(
-    olr_ds[olr_var].sel(spatial="SH").compute(),
-    asr_ds[asr_var].sel(spatial="SH").compute(),
-    ax=axs[1],
-    cax=cax,
-    plot_kwargs={"s": 5},
-    connected=False,
-)
-plot_radiative_imbalance(
-    olr_ds[olr_var].sel(spatial="NH").compute(),
-    asr_ds[asr_var].sel(spatial="NH").compute(),
-    ax=axs[2],
-    cax=cax,
-    plot_kwargs={"s": 5},
-    connected=False,
-)
-axs[0].set_title("Global", fontsize=fontsize)
-axs[1].set_title("SH", fontsize=fontsize)
-axs[2].set_title("NH", fontsize=fontsize)
-axs[1].set_ylabel("")
-axs[2].set_ylabel("")
-# %%
-fontsize = 14
-fig, axs = plt.subplots(1, 3, figsize=(12, 4))
-cax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
-plot_radiative_imbalance_annual(
-    olr_ds[olr_var].sel(spatial="G").groupby("time.year").mean(),
-    asr_ds[asr_var].sel(spatial="G").groupby("time.year").mean(),
-    ax=axs[0],
-    cax=cax,
-    plot_kwargs={"s": 5},
-    connected=False,
-)
-plot_radiative_imbalance_annual(
-    olr_ds[olr_var].sel(spatial="SH").groupby("time.year").mean(),
-    asr_ds[asr_var].sel(spatial="SH").groupby("time.year").mean(),
-    ax=axs[1],
-    cax=cax,
-    plot_kwargs={"s": 5},
-    connected=False,
-)
-plot_radiative_imbalance_annual(
-    olr_ds[olr_var].sel(spatial="NH").groupby("time.year").mean(),
-    asr_ds[asr_var].sel(spatial="NH").groupby("time.year").mean(),
-    ax=axs[2],
-    cax=cax,
-    plot_kwargs={"s": 5},
-    connected=False,
-)
-axs[0].set_title("Global", fontsize=fontsize)
-axs[1].set_title("SH", fontsize=fontsize)
-axs[2].set_title("NH", fontsize=fontsize)
-axs[1].set_ylabel("")
-axs[2].set_ylabel("")
-# %%
-datapath = curc_cesm2_245_outpath
-
-asr_files = crawl_and_list_glob(datapath, f"**/*.{asr_var}.*")
-olr_files = crawl_and_list_glob(datapath, f"**/*.{olr_var}.*")
-#
-asr_ds = xr.open_mfdataset(asr_files)
-olr_ds = xr.open_mfdataset(olr_files)
-
-fontsize = 14
-fig, axs = plt.subplots(1, 3, figsize=(12, 4))
-cax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
-plot_radiative_imbalance(
-    olr_ds[olr_var].sel(spatial="G").compute(),
-    asr_ds[asr_var].sel(spatial="G").compute(),
-    ax=axs[0],
-    cax=cax,
-    plot_kwargs={"s": 5},
-    connected=False,
-)
-plot_radiative_imbalance(
-    olr_ds[olr_var].sel(spatial="SH").compute(),
-    asr_ds[asr_var].sel(spatial="SH").compute(),
-    ax=axs[1],
-    cax=cax,
-    plot_kwargs={"s": 5},
-    connected=False,
-)
-plot_radiative_imbalance(
-    olr_ds[olr_var].sel(spatial="NH").compute(),
-    asr_ds[asr_var].sel(spatial="NH").compute(),
-    ax=axs[2],
-    cax=cax,
-    plot_kwargs={"s": 5},
-    connected=False,
-)
-axs[0].set_title("Global", fontsize=fontsize)
-axs[1].set_title("SH", fontsize=fontsize)
-axs[2].set_title("NH", fontsize=fontsize)
-axs[1].set_ylabel("")
-axs[2].set_ylabel("")
-# %%
-datapath = curc_ariseSAI_outpath
-
-asr_files = crawl_and_list(datapath, f"1p5K-SAI.001.cam.h0.{asr_var}.")
-olr_files = crawl_and_list(datapath, f"1p5K-SAI.001.cam.h0.{olr_var}.")
-#
-asr_ds = xr.open_mfdataset(asr_files)
-olr_ds = xr.open_mfdataset(olr_files)
-
-fontsize = 14
-fig, axs = plt.subplots(1, 3, figsize=(12, 4))
-cax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
-plot_radiative_imbalance(
-    olr_ds[olr_var].sel(spatial="G").compute(),
-    asr_ds[asr_var].sel(spatial="G").compute(),
-    ax=axs[0],
-    cax=cax,
-    plot_kwargs={"s": 5},
-    connected=False,
-)
-plot_radiative_imbalance(
-    olr_ds[olr_var].sel(spatial="SH").compute(),
-    asr_ds[asr_var].sel(spatial="SH").compute(),
-    ax=axs[1],
-    cax=cax,
-    plot_kwargs={"s": 5},
-    connected=False,
-)
-plot_radiative_imbalance(
-    olr_ds[olr_var].sel(spatial="NH").compute(),
-    asr_ds[asr_var].sel(spatial="NH").compute(),
-    ax=axs[2],
-    cax=cax,
-    plot_kwargs={"s": 5},
-    connected=False,
-)
-axs[0].set_title("Global", fontsize=fontsize)
-axs[1].set_title("SH", fontsize=fontsize)
-axs[2].set_title("NH", fontsize=fontsize)
-axs[1].set_ylabel("")
-axs[2].set_ylabel("")
-# %%
-olr_ds["FLNT"].sel(spatial="G").groupby("time.year").mean().plot()
-asr_ds["FSNTOA"].sel(spatial="G").groupby("time.year").mean().plot()
