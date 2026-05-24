@@ -2,8 +2,10 @@
 """
 CESM2 Ocean Heat Content (OHC) Calculator
 
-Computes global ocean heat content from CESM2/POP2 monthly output using full
-equation of state (pre-calculated density from model).
+Computes global ocean heat content from CESM2/POP2 monthly output using constant density and heat capacity (per CESM examples below).
+
+https://ncar.github.io/CESM-Tutorial/notebooks/diagnostics/pop/advanced_pop.html
+https://ncar.github.io/osdf-examples/jetstream-cesm-oceanheat/
 
 Author: Drafted by OpenCode and corrected/refined by Jonah Shaw
 Date: 2026-04-30
@@ -60,17 +62,11 @@ def submit_OHC_job(filepath, savepath):
     os.system(f"qsub -v INPUT_FILE={filepath},OUTPUT_FILE={savepath} /glade/u/home/jonahshaw/Scripts/git_repos/PRISM/job_scripts/compute_ohc_single.sh")
 
 def compute_ohc_single_file(filepath, savepath):
-    
-    rho_file = filepath.replace(".TEMP.", ".RHO.")
-    if not os.path.exists(rho_file):
-        logging.error(f"{rho_file} does not exist, cannot compute OHC")
-        return
 
-    logging.info(f"Processing {filepath} and {rho_file} to compute OHC, saving to {savepath}")
-    ds_merged = xr.open_mfdataset([filepath, rho_file], chunks={"time":1}, decode_timedelta=True, combine="by_coords")
-    
+    ds_merged = xr.open_mfdataset(filepath, chunks={"time":1}, decode_timedelta=True, combine="by_coords")
+
     # Check that the needed variables are a subset of the merged dataset variables
-    required_vars = ["TEMP", "RHO", "dz", "TAREA", "KMT"]
+    required_vars = ["TEMP", "dz", "TAREA", "KMT"]
     required_coords = ["z_t", "z_w_bot"]
     missing_vars = [var for var in required_vars if var not in ds_merged.data_vars]
     missing_coords = [coord for coord in required_coords if coord not in ds_merged.coords]
@@ -99,7 +95,7 @@ def compute_OHC(
     """
 
     # Physical constants
-    CP_SEAWATER = 3850.0  # J/(kg·K) - specific heat capacity of seawater
+    CP_SEAWATER = 3996.0  # J/(kg·K) - specific heat capacity of seawater
 
     # Convert dz from cm to m
     dz_m = ds['dz'] / 100.0  # [m]
@@ -110,10 +106,9 @@ def compute_OHC(
     # Ocean mask (0=land, >0=ocean)
     kmt = ds['KMT']
     kmt_mask = kmt > 0  # True for ocean points, False for land points
-    tarea_ocean = tarea_m2.where(kmt_mask) # Mask weights to ocean cells only
 
     # Convert RHO from g/cm³ to kg/m³, 1kg = 1000g, 1m3 = 1e6 cm3
-    rho_kg_m3 = ds['RHO'] * 1000.0  # [kg/m³]
+    rho_kg_m3 = 1026 # [kg/m³]
 
     # Calculate OHC per unit volume: ρ × c_p × ΔT
     # Shape: (z_t, nlat, nlon) [J/(m³·K)]
@@ -137,6 +132,7 @@ def compute_OHC(
         [ohc_per_area, ohc_per_area_300m, ohc_per_area_700m, ohc_per_area_2000m],
         pd.Index([-1, 300, 700, 2000], name="ohc_depth"),
     )
+    ohc_per_area = ohc_per_area.where(kmt_mask)  # Mask the final OHC per area to ocean points only
 
     # Compute global and ocean surface areas to include in metadata
     global_area = (ds['TAREA'] * 1e-4).sum(["nlat", "nlon"])
