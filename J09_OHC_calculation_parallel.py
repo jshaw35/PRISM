@@ -110,6 +110,7 @@ def compute_OHC(
     # Ocean mask (0=land, >0=ocean)
     kmt = ds['KMT']
     kmt_mask = kmt > 0  # True for ocean points, False for land points
+    tarea_ocean = tarea_m2.where(kmt_mask) # Mask weights to ocean cells only
 
     # Convert RHO from g/cm³ to kg/m³, 1kg = 1000g, 1m3 = 1e6 cm3
     rho_kg_m3 = ds['RHO'] * 1000.0  # [kg/m³]
@@ -117,19 +118,19 @@ def compute_OHC(
     # Calculate OHC per unit volume: ρ × c_p × ΔT
     # Shape: (z_t, nlat, nlon) [J/(m³·K)]
     ohc_per_vol = rho_kg_m3 * CP_SEAWATER * ds['TEMP']  # [J/(m³)]
+    # Apply ocean mask (KMT > 0 = ocean)
+    ohc_per_masked = ohc_per_vol.where(kmt_mask)  # [J/(m³)]
     # Integrate OHC per unit volume over depth to get OHC per unit area
     # Total OHC
-    ohc_per_area = (ohc_per_vol * dz_m).sum(dim='z_t')  # [J/m²]
+    ohc_per_area = (ohc_per_masked * dz_m).sum(dim='z_t')  # [J/m²]
+
     # Get z_t where z_w_bot < 300m, 700m, 2000m
     depth_mask_300 = (ds['z_w_bot'] < 300e2).values
     depth_mask_700 = (ds['z_w_bot'] < 700e2).values
     depth_mask_2000 = (ds['z_w_bot'] < 2000e2).values
-    # Down to 300m
-    ohc_per_area_300m = (ohc_per_vol * dz_m).sel(z_t=depth_mask_300).sum(dim='z_t')  # [J/m²]
-    # Down to 700m
-    ohc_per_area_700m = (ohc_per_vol * dz_m).sel(z_t=depth_mask_700).sum(dim='z_t')  # [J/m²]
-    # Down to 2000m
-    ohc_per_area_2000m = (ohc_per_vol * dz_m).sel(z_t=depth_mask_2000).sum(dim='z_t')  # [J/m²]
+    ohc_per_area_300m = (ohc_per_masked * dz_m).isel(z_t=depth_mask_300).sum(dim='z_t')  # [J/m²]
+    ohc_per_area_700m = (ohc_per_masked * dz_m).isel(z_t=depth_mask_700).sum(dim='z_t')  # [J/m²]
+    ohc_per_area_2000m = (ohc_per_masked * dz_m).isel(z_t=depth_mask_2000).sum(dim='z_t')  # [J/m²]
 
     # Concatenate the OHC per area for different depth ranges into a single dataarray with a new "depth_range" dimension
     ohc_per_area = xr.concat(
@@ -141,19 +142,17 @@ def compute_OHC(
     global_area = (ds['TAREA'] * 1e-4).sum(["nlat", "nlon"])
     ocean_area = (ds['TAREA'].where(ds["KMT"]>0) * 1e-4).sum(["nlat", "nlon"])
 
-    # Apply ocean mask (KMT > 0 = ocean)
-    ohc_masked = ohc_per_area.where(kmt_mask) # Set land points to NaN
-    ohc_masked.attrs["long_name"] = "Ocean Heat Content per unit area"
-    ohc_masked.attrs["units"] = "J/m²"
-    ohc_masked.name = "OHC"
+    ohc_per_area.attrs["long_name"] = "Ocean Heat Content per unit area"
+    ohc_per_area.attrs["units"] = "J/m²"
+    ohc_per_area.name = "OHC"
     # Compute the global mean OHC by averaging over lat and lon, weighting by the grid cell area
     # We can use the TAREA variable for area weighting
-    global_mean_ohc = ohc_masked.weighted(tarea_m2).mean(dim=['nlat', 'nlon'], skipna=True)  # [J/m²]
+    global_mean_ohc = ohc_per_area.weighted(tarea_m2).mean(dim=['nlat', 'nlon'], skipna=True)  # [J/m²]
     global_mean_ohc.attrs["long_name"] = "Global Ocean Heat Content"
     global_mean_ohc.attrs["units"] = "J/m²"
     global_mean_ohc.name = "OHC_global_mean"
 
-    ohc_ds = xr.merge([ohc_masked, global_mean_ohc])
+    ohc_ds = xr.merge([ohc_per_area, global_mean_ohc])
     ohc_ds.attrs["description"] = "Ocean Heat Content calculated from CESM2/POP2 output using the equation of state. OHC is calculated as the integral of rho * c_p * dT over the ocean volume, and then averaged over the ocean surface area to get OHC per unit area. The global mean OHC is also provided as a separate variable."
     ohc_ds.attrs["global_area_m2"] = global_area.values
     ohc_ds.attrs["ocean_area_m2"] = ocean_area.values
@@ -207,8 +206,7 @@ def shift_noleap_time_back_one_month(time_values):
 
 # %%
 if __name__ == "__main__":
-    # If on CURC
-
+    # If on glade
     CASE_CONFIG = {
         "CESM2_LME": {
             "data_dir": "/gdex/data/d651078",
@@ -258,11 +256,11 @@ if __name__ == "__main__":
 
     for case in CASE_CONFIG:
         rawdata_root = Path(CASE_CONFIG[case]["data_dir"])
-        for pat in CASE_CONFIG[case]["file_patterns"]:
+        for pattern in CASE_CONFIG[case]["file_patterns"]:
             test_out = crawl_and_process(
                 input_dir=rawdata_root,
                 output_dir=f"/glade/work/jonahshaw/PRISM_data/spatial_OHC_data/{case}/",
-                match_pattern=pat,
+                match_pattern=pattern,
                 process_fn=submit_OHC_job,
                 process_path_fn=lambda p: p.replace("TEMP", "OHC")
             )
