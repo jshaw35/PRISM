@@ -45,18 +45,32 @@ def shift_noleap_time_back_one_month(time_values):
     )
 
 
-def compute_IEEI(
+def weighted_annualmean(
+    ds,
+    account_for_leap: bool = False,
+):
+    """
+    Compute an appropriately weighted annual mean accounting for the days in each month.
+    """
+    assert("time" in ds.coords), "Dataset must have a time coordinate"
+
+    ds_weightedannual = ds.groupby("time.year").map(lambda x: x.weighted(get_weights_by_month2(x["time"], account_for_leap)).mean(dim="time"))
+
+    return ds_weightedannual
+
+
+def compute_iEEI(
     olr_ds,
     asr_ds,
     account_for_leap: bool = False,
 ):
     """
-    Compute the integrated earth's energy imbalance (IEEI) from ASR and OLR fields.
+    Compute the integrated earth's energy imbalance (iEEI) from ASR and OLR fields.
     """
     assert (olr_ds["time"] == asr_ds["time"]).all(), "OLR and ASR time fields are not identical"
     time_ds = olr_ds["time"]
 
-    weights = get_weights_by_month(time_ds, account_for_leap)
+    weights = get_weights_by_month2(time_ds, account_for_leap)
     eei_ds = asr_ds - olr_ds
     ieei_ds = np.cumsum(eei_ds * weights)
 
@@ -67,7 +81,7 @@ def compute_IEEI(
     return earth_SA * ieei_ds
 
 
-def get_weights_by_month(
+def get_weights_by_month2(
     time_ds,
     account_for_leap: bool = False,
 ):
@@ -92,26 +106,15 @@ def get_weights_by_month(
         }
     )
 
-    time_weights = []
-    if account_for_leap == False:
-        for _t in time_ds:
-            time_weights.append(weights.sel(month=_t['time.month']))
-    else:
-        for _t in time_ds:
-            if _t["time.year"] % 4 == 0:
-                time_weights.append(weights_leap.sel(month=_t['time.month']))
-            else:
-                time_weights.append(weights.sel(month=_t['time.month']))
+    month_values = time_ds.dt.month
+    year_values = time_ds.dt.year
 
-    # Duplicate the time dimension but with weights as values
-    weights_ds = xr.DataArray(
-        data=time_weights,
-        dims="time",
-        coords={
-            "time":time_ds,
-        },
-    )
-    return weights_ds
+    # Vectorized selection of the appropriate weights for each time point
+    if account_for_leap:
+        weights = xr.where((year_values % 4 == 0), weights_leap.sel(month=month_values), weights.sel(month=month_values))
+    else:
+        weights = weights.sel(month=month_values)
+    return weights
 
 
 def plot_eei_timeseries(
@@ -121,7 +124,7 @@ def plot_eei_timeseries(
     colors=sns.color_palette("colorblind", n_colors=3),
 ):
     """
-    Plot timeseries of ASR, OLR, EEI, and IEEI on a subplot with twinned y-axes.
+    Plot timeseries of ASR, OLR, EEI, and iEEI on a subplot with twinned y-axes.
     
     Parameters
     ----------
@@ -139,7 +142,7 @@ def plot_eei_timeseries(
     Returns
     -------
     ax1, ax2, ax3 : matplotlib.axes.Axes
-        The three twinned axes (ASR/OLR, EEI, IEEI)
+        The three twinned axes (ASR/OLR, EEI, iEEI)
     """
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=(8, 5))
@@ -169,7 +172,7 @@ def plot_eei_timeseries(
              linewidth=0.7, alpha=0.5, label="EEI (annual)")
     if ieei_annual is not None:
         ax3.plot(ieei_annual[time_dim], ieei_annual, color=ieei_color, linestyle="-", 
-                linewidth=0.7, alpha=0.5, label="IEEI (annual)")
+                linewidth=0.7, alpha=0.5, label="iEEI (annual)")
     
     # Plot decadal means (thick, solid)
     ax1.plot(asr_decadal[time_dim], asr_decadal, color=asr_color, linestyle="-", 
@@ -182,7 +185,7 @@ def plot_eei_timeseries(
     
     if ieei_annual is not None:
         ax3.plot(ieei_decadal[time_dim], ieei_decadal, color=ieei_color, linestyle="-", 
-                linewidth=2.5, label="IEEI (decadal)")
+                linewidth=2.5, label="iEEI (decadal)")
     
     # Set axis labels and colors
     ax1.set_xlabel("Year", fontsize=fontsize)
@@ -193,7 +196,7 @@ def plot_eei_timeseries(
     ax2.tick_params(axis="y", labelcolor=eei_color)
     
     if ieei_annual is not None:
-        ax3.set_ylabel("IEEI [W]", fontsize=fontsize, color=ieei_color)
+        ax3.set_ylabel("iEEI [W]", fontsize=fontsize, color=ieei_color)
         ax3.tick_params(axis="y", labelcolor=ieei_color)
     
     # Add title and grid
@@ -220,18 +223,18 @@ def plot_ieei_ts(
     ax1.grid(True, alpha=0.3)
     # Plot annual means (thin, solid)
     ax1.plot(ieei_annual[time_dim], ieei_annual, color=colors[0], linestyle="-", 
-                linewidth=0.7, alpha=0.5, label="IEEI (annual)")
+                linewidth=0.7, alpha=0.5, label="iEEI (annual)")
     ax2.plot(ts_annual[time_dim], ts_annual, color=colors[1], linestyle="-", 
-                linewidth=0.7, alpha=0.5, label="TS (annual)")
+                linewidth=0.7, alpha=0.5, label="Surface Temperature (annual)")
     
     # Plot decadal means (thick, solid)
     ax1.plot(ieei_decadal[time_dim], ieei_decadal, color=colors[0], linestyle="-", 
-                linewidth=2.5, alpha=1, label="IEEI (decadal)")
+                linewidth=2.5, alpha=1, label="iEEI (decadal)")
     ax2.plot(ts_decadal[time_dim], ts_decadal, color=colors[1], linestyle="-", 
-                linewidth=2.5, alpha=1, label="TS (decadal)")
+                linewidth=2.5, alpha=1, label="Surface Temperature (decadal)")
 
     ax1.set_xlabel("Year", fontsize=14)
-    ax1.set_ylabel("IEEI [J]", fontsize=14)#, color=colors[0])
+    ax1.set_ylabel("iEEI [J]", fontsize=14)#, color=colors[0])
     ax1.tick_params(axis="y")#, labelcolor=colors[0])
 
     ax2.tick_params(axis="y", labelcolor=colors[1])
@@ -255,21 +258,21 @@ def plot_ieei_ts_ohc(
     ax1.grid(True, alpha=0.3)
     # Plot annual means (thin, solid)
     ax1.plot(ieei_annual[time_dim], ieei_annual, color=colors[0], linestyle="-", 
-                linewidth=0.7, alpha=0.5, label="IEEI (annual)")
+                linewidth=0.7, alpha=0.5, label="iEEI (annual)")
     ax2.plot(ts_annual[time_dim], ts_annual, color=colors[1], linestyle="-", 
-                linewidth=0.7, alpha=0.5, label="TS (annual)")
+                linewidth=0.7, alpha=0.5, label="Surface Temperature (annual)")
     ax1.plot(ohc_annual[time_dim], ohc_annual, color=colors[2], linestyle="-", 
                 linewidth=0.7, alpha=0.5, label="OHC (annual)")
     # Plot decadal means (thick, solid)
     ax1.plot(ieei_decadal[time_dim], ieei_decadal, color=colors[0], linestyle="-", 
-                linewidth=2.5, alpha=1, label="IEEI (decadal)")
+                linewidth=2.5, alpha=1, label="iEEI (decadal)")
     ax2.plot(ts_decadal[time_dim], ts_decadal, color=colors[1], linestyle="-", 
-                linewidth=2.5, alpha=1, label="TS (decadal)")
+                linewidth=2.5, alpha=1, label="Surface Temperature (decadal)")
     ax1.plot(ohc_decadal[time_dim], ohc_decadal, color=colors[2], linestyle="-", 
                 linewidth=2.5, alpha=1, label="OHC (decadal)")
 
     ax1.set_xlabel("Year", fontsize=14)
-    ax1.set_ylabel("IEEI, OHC [J]", fontsize=14)
+    ax1.set_ylabel("iEEI, OHC [J]", fontsize=14)
     ax1.tick_params(axis="y")
 
     ax2.tick_params(axis="y", labelcolor=colors[1])
@@ -299,7 +302,7 @@ def compute_ieei_with_start_year(
     account_for_leap: bool = False,
 ):
     """
-    Compute the integrated earth's energy imbalance (IEEI) starting from a specified year.
+    Compute the integrated earth's energy imbalance (iEEI) starting from a specified year.
 
     Parameters
     ----------
@@ -308,7 +311,7 @@ def compute_ieei_with_start_year(
     olr_ds : xr.DataArray
         Outgoing longwave radiation data
     start_year : int
-        Year to begin integration (IEEI will be zero at this year)
+        Year to begin integration (iEEI will be zero at this year)
     account_for_leap : bool, default False
         Whether to account for leap years in the weighting
 
@@ -321,8 +324,8 @@ def compute_ieei_with_start_year(
     asr_sliced = asr_ds.where(asr_ds["time.year"] >= start_year, drop=True)
     olr_sliced = olr_ds.where(olr_ds["time.year"] >= start_year, drop=True)
 
-    # Compute IEEI using the existing function
-    ieei_ds = compute_IEEI(olr_sliced, asr_sliced, account_for_leap=account_for_leap)
+    # Compute iEEI using the existing function
+    ieei_ds = compute_iEEI(olr_sliced, asr_sliced, account_for_leap=account_for_leap)
 
     return ieei_ds
 
@@ -331,7 +334,7 @@ def compute_decadal(
     ds,
     center=True,
 ):
-    ds_decadal = ds.resample(time='10YE', offset=pd.Timedelta(weeks=-52)).mean().groupby("time.year").mean()
+    ds_decadal = weighted_annualmean(ds.resample(time='10YE', offset=pd.Timedelta(weeks=-52)).mean())
     if center:
         ds_decadal["year"] = ds_decadal["year"] - 5
     return ds_decadal
@@ -342,7 +345,8 @@ def compute_decadal2(
     center=True,
 ):
     if "time" in ds.coords:
-        ds_decadal = ds.rolling(time=120, min_periods=120, center=True).mean(dim="time").sel(time=ds["time"][::12])
+        ds_annual = weighted_annualmean(ds)
+        ds_decadal = ds_annual.rolling(year=10, min_periods=10, center=True).mean(dim="year")
     elif "year" in ds.coords:
         ds_decadal = ds.rolling(year=10, min_periods=10, center=True).mean(dim="year")
     return ds_decadal
@@ -868,6 +872,24 @@ if __name__ == "__main__":
             "keep_left_axes": True,
             "keep_right_axes": True,
         },
+        "CESM2_WACCM_1850control": {
+            "selfunc": lambda ds: ds['b.e21.BW1850.f09_g17.CMIP6-piControl.001'],
+            "selfunc_ohc": lambda ds: ds['b.e21.BW1850.f09_g17.CMIP6-piControl.001']["OHC_global_mean"].sel(ohc_depth=-1) * ds['b.e21.BW1850.f09_g17.CMIP6-piControl.001'].attrs["ocean_area_m2"],
+            # "ax1_lims": (235, 244),
+            # "ax2_lims": (-3, 6),
+            "ax1_lims": (237, 247),
+            "ax2_lims": (-8, 2),
+            "ax1_major_y": MultipleLocator(1),
+            "axb1_lims": (-0.5e24, 1.0e24),
+            "axb2_lims": (287.0, 289.5),
+            # "axb1_lims": (-0.5e24, 1.0e24),
+            # "axb2_lims": (287.0, 289.5),
+            "axb1_yticks": np.arange(-0.5e24, 1.25e24+0.01e24, 0.25e24),
+            "axb2_yticks": np.arange(286.5, 290.0+0.01, 0.5),
+            "xlims": (1, 500),
+            "keep_left_axes": True,
+            "keep_right_axes": True,
+        },
     }
     # %%
     # PLOT 1: Historical scenarios (CESM-LME, CESM2-LME)
@@ -878,42 +900,52 @@ if __name__ == "__main__":
     fig, axes = plt.subplots(2, 2, figsize=(15, 10))
     fig.subplots_adjust(wspace=0.40)
     
-    case_list_1 = ["CESM_LME", "CESM2_LME"]
-    start_year_1 = 850
+    case_list_1 = ["CESM2_LME", "CESM2_WACCM_1850control"]
+    startyears_dict = {
+        "CESM_LME": 850,
+        "CESM2_LME": 850,
+        "CESM2_WACCM_1850control": 1,
+    }
     ts_var = "TS"
     olr_var = "FLNT"
     asr_var = "FSNT"
 
-    for ax, axb, case_label in zip(axes[0], axes[1], case_list_1):
+    top_handles = []
+    bottom_handles = []
+    top_labels = []
+    bottom_labels = []
+
+    for idx, (ax, axb, case_label) in enumerate(zip(axes[0], axes[1], case_list_1)):
         logging.info(f"Plotting case: {case_label}")
         # Extract ASR and OLR data
         selfunc = PLOT_CONFIGS[case_label].get("selfunc")
         selfunc_ohc = PLOT_CONFIGS[case_label].get("selfunc_ohc")
-        asr_ds = selfunc(data_dict[case_label])[asr_var].sel(spatial="G")
-        olr_ds = selfunc(data_dict[case_label])[olr_var].sel(spatial="G")
-        ts_ds = selfunc(data_dict[case_label])[ts_var].sel(spatial="G")
+        asr_ds = selfunc(data_dict[case_label])[asr_var].sel(spatial="G").compute()
+        olr_ds = selfunc(data_dict[case_label])[olr_var].sel(spatial="G").compute()
+        ts_ds = selfunc(data_dict[case_label])[ts_var].sel(spatial="G").compute()
         ohc_ds = selfunc_ohc(ohc_dict[case_label]) if selfunc_ohc is not None else None
         ohc_ds = ohc_ds - ohc_ds.isel(time=0) if ohc_ds is not None else None  # Convert OHC to anomaly
-        
+
         # Compute annual means
-        asr_annual = asr_ds.groupby("time.year").mean()
-        olr_annual = olr_ds.groupby("time.year").mean()
-        ts_annual = ts_ds.groupby("time.year").mean()
+        asr_annual = weighted_annualmean(asr_ds)
+        olr_annual = weighted_annualmean(olr_ds)
+        ts_annual = weighted_annualmean(ts_ds)
+
         eei_annual = asr_annual - olr_annual
-        ohc_annual = ohc_ds.groupby("time.year").mean() if ohc_ds is not None else None
+        ohc_annual = weighted_annualmean(ohc_ds) if ohc_ds is not None else None
         
-        # Compute decadal means and center the decade labels by adding 5 years to the year coordinate (e.g. decade from 850-859 will be labeled as 855)        # Compute decadal means and center the decade labels by adding 5 years to the year coordinate (e.g. decade from 850-859 will be labeled as 855)
+        # Compute decadal means and center
         asr_decadal = compute_decadal(asr_ds)
         olr_decadal = compute_decadal(olr_ds)
         ts_decadal = compute_decadal(ts_ds)
         eei_decadal = asr_decadal - olr_decadal
         ohc_decadal = compute_decadal(ohc_ds) if ohc_ds is not None else None
-        # Compute IEEI starting from start_year_1
-        ieei_ds = compute_ieei_with_start_year(asr_ds, olr_ds, start_year_1)
+        # Compute iEEI starting from appropriate year for each case
+        ieei_ds = compute_ieei_with_start_year(asr_ds, olr_ds, startyears_dict[case_label])
         
-        # Create annual and decadal means for IEEI by grouping years
-        ieei_annual = ieei_ds.groupby("time.year").mean()
-        ieei_decadal = ieei_ds.resample(time='10YE', offset=pd.Timedelta(weeks=-52)).mean().groupby("time.year").mean()
+        # Create annual and decadal means for iEEI by grouping years
+        ieei_annual = weighted_annualmean(ieei_ds)
+        ieei_decadal = compute_decadal(ieei_ds)
         
         # Plot ASR, OLR, and EEI
         ax1, ax2, ax3 = plot_eei_timeseries(
@@ -922,7 +954,7 @@ if __name__ == "__main__":
             ax=ax, fontsize=14, case_name=case_label,
             colors=sns.color_palette("colorblind", n_colors=6),
         )
-        # Plot IEEI, TS, and OHC if available
+        # Plot iEEI, TS, and OHC if available
         if ohc_annual is not None:
             axb, axb2 = plot_ieei_ts_ohc(
                 ieei_annual=ieei_annual, ieei_decadal=ieei_decadal,
@@ -945,7 +977,6 @@ if __name__ == "__main__":
         if "keep_right_axes" in PLOT_CONFIGS[case_label]:
             if not PLOT_CONFIGS[case_label]["keep_right_axes"]:
                 ax2.set_ylabel('')
-                # ax3.set_ylabel('')
         # Set y-axis limits
         if "ax1_lims" in PLOT_CONFIGS[case_label]:
             ax1.set_ylim(*PLOT_CONFIGS[case_label]["ax1_lims"])
@@ -968,6 +999,28 @@ if __name__ == "__main__":
         # Add a horizontal line at y=0 for the EEI subplot
         ax2.axhline(0, color='grey', linestyle='--', linewidth=1)
 
+        # Collect handles and labels from left column for combined legend
+        if idx == 0:
+            handles1, labels1 = ax1.get_legend_handles_labels()
+            handles2, labels2 = ax2.get_legend_handles_labels()
+            top_handles.extend(handles1[2:] + handles2[1:])
+            top_labels.extend(["ASR", "OLR", "EEI"])
+            handles_b, labels_b = axb.get_legend_handles_labels()
+            handles_b2, labels_b2 = axb2.get_legend_handles_labels()
+            bottom_handles.extend(handles_b[2:] + handles_b2[1:])
+            bottom_labels.extend(["iEEI", "OHC", "Surface Temperature"])
+    
+    # Create a single legend for the left column
+    if top_handles and top_labels:
+        ax1.legend(
+            top_handles, top_labels, loc='lower right', 
+            fontsize=12, framealpha=0.95,
+        )
+    if bottom_handles and bottom_labels:
+        axb.legend(
+            bottom_handles, bottom_labels, loc='lower right', 
+            fontsize=12, framealpha=0.95,
+        )
     fig.savefig("figures/figure3b_toprow.png", dpi=300, bbox_inches='tight')
     logging.info("Saved figure3b_toprow.png")
     plt.close(fig)
@@ -1028,53 +1081,58 @@ if __name__ == "__main__":
     olr_var = "FLNT"
     asr_var = "FSNT"
 
-    for ax, axb, case_label in zip(axes[0], axes[1], case_list_2):
+    top_handles = []
+    bottom_handles = []
+    top_labels = []
+    bottom_labels = []
+
+    for idx, (ax, axb, case_label) in enumerate(zip(axes[0], axes[1], case_list_2)):
         logging.info(f"Plotting case: {case_label}")
 
         # Extract ASR and OLR data
         selfunc = PLOT_CONFIGS[case_label].get("selfunc")
         selfunc_ohc = PLOT_CONFIGS[case_label].get("selfunc_ohc")
-        asr_ds = selfunc(data_dict[case_label])[asr_var].sel(spatial="G")
-        olr_ds = selfunc(data_dict[case_label])[olr_var].sel(spatial="G")
-        ts_ds = selfunc(data_dict[case_label])[ts_var].sel(spatial="G")
-        ohc_ds = selfunc_ohc(ohc_dict[case_label])
+        asr_ds = selfunc(data_dict[case_label])[asr_var].sel(spatial="G").compute()
+        olr_ds = selfunc(data_dict[case_label])[olr_var].sel(spatial="G").compute()
+        ts_ds = selfunc(data_dict[case_label])[ts_var].sel(spatial="G").compute()
+        ohc_ds = selfunc_ohc(ohc_dict[case_label]).compute()
         ohc_ds = ohc_ds - ohc_ds.isel(time=0)  # Convert OHC to anomaly
         
         # Compute annual means
-        asr_annual = asr_ds.groupby("time.year").mean()
-        olr_annual = olr_ds.groupby("time.year").mean()
-        ts_annual = ts_ds.groupby("time.year").mean()
+        asr_annual = weighted_annualmean(asr_ds)
+        olr_annual = weighted_annualmean(olr_ds)
+        ts_annual = weighted_annualmean(ts_ds)
         eei_annual = asr_annual - olr_annual
-        ohc_annual = ohc_ds.groupby("time.year").mean()
+        ohc_annual = weighted_annualmean(ohc_ds) if ohc_ds is not None else None
 
         # Compute decadal means
-        asr_decadal = asr_ds.resample(time='10YE').mean().groupby("time.year").mean()
-        olr_decadal = olr_ds.resample(time='10YE').mean().groupby("time.year").mean()
-        ts_decadal = ts_ds.resample(time='10YE').mean().groupby("time.year").mean()
+        asr_decadal = compute_decadal(asr_ds)
+        olr_decadal = compute_decadal(olr_ds)
+        ts_decadal = compute_decadal(ts_ds)
         eei_decadal = asr_decadal - olr_decadal
-        ohc_decadal = ohc_ds.resample(time='10YE').mean().groupby("time.year").mean()
+        ohc_decadal = compute_decadal(ohc_ds) if ohc_ds is not None else None
         
-        # Compute IEEI starting from start_year_2
+        # Compute iEEI starting from start_year_2
         ieei_ds = compute_ieei_with_start_year(asr_ds, olr_ds, start_year_2)
         
-        # Create annual and decadal means for IEEI by grouping years
-        ieei_annual = ieei_ds.groupby("time.year").mean()
-        ieei_decadal = ieei_ds.resample(time='10YE').mean().groupby("time.year").mean()
+        # Create annual and decadal means for iEEI by grouping years
+        ieei_annual = weighted_annualmean(ieei_ds)
+        ieei_decadal = compute_decadal(ieei_ds)
 
         # Plot
         ax1, ax2, ax3 = plot_eei_timeseries(
             asr_annual, olr_annual, eei_annual, None,
             asr_decadal, olr_decadal, eei_decadal, None,
             ax=ax, fontsize=14, case_name=case_label,
-            colors=sns.color_palette("colorblind", n_colors=3),
+            colors=sns.color_palette("colorblind", n_colors=6),
         )
 
-        # Plot IEEI, TS, and OHC
+        # Plot iEEI, TS, and OHC
         axb, axb2 = plot_ieei_ts_ohc(
             ieei_annual=ieei_annual, ieei_decadal=ieei_decadal,
             ts_annual=ts_annual, ts_decadal=ts_decadal,
             ohc_annual=ohc_annual, ohc_decadal=ohc_decadal,
-            ax=axb, colors=["orange", "purple", "green"], fontsize=14, time_dim="year",
+            ax=axb, colors=sns.color_palette("colorblind", n_colors=6)[3:], fontsize=14, time_dim="year",
         )
 
         ax1.set_xlim(PLOT_CONFIGS[case_label]["xlims"])
@@ -1087,7 +1145,6 @@ if __name__ == "__main__":
             if not PLOT_CONFIGS[case_label]["keep_right_axes"]:
                 ax2.set_ylabel('')
                 axb2.set_ylabel('')
-                # ax3.set_ylabel('')
         # Set y-axis limits
         if "ax1_lims" in PLOT_CONFIGS[case_label]:
             ax1.set_ylim(*PLOT_CONFIGS[case_label]["ax1_lims"])
@@ -1101,6 +1158,29 @@ if __name__ == "__main__":
 
         # Add a horizontal line at y=0 for the EEI subplot
         ax2.axhline(0, color='grey', linestyle='--', linewidth=1)
+
+        # Collect handles and labels from left column for combined legend
+        if idx == 0:
+            handles1, labels1 = ax1.get_legend_handles_labels()
+            handles2, labels2 = ax2.get_legend_handles_labels()
+            top_handles.extend(handles1[2:] + handles2[1:])
+            top_labels.extend(["ASR", "OLR", "EEI"])
+            handles_b, labels_b = axb.get_legend_handles_labels()
+            handles_b2, labels_b2 = axb2.get_legend_handles_labels()
+            bottom_handles.extend(handles_b[2:] + handles_b2[1:])
+            bottom_labels.extend(["iEEI", "OHC", "Surface Temperature"])
+    
+    # Create a single legend for the left column
+    if top_handles and top_labels:
+        ax1.legend(
+            top_handles, top_labels, loc='lower right', 
+            fontsize=12, framealpha=0.95,
+        )
+    if bottom_handles and bottom_labels:
+        axb.legend(
+            bottom_handles, bottom_labels, loc='lower right', 
+            fontsize=12, framealpha=0.95,
+        )
 
     fig.savefig("figures/figure3b_bottomrow.png", dpi=300, bbox_inches='tight')
     logging.info("Saved figure3b_bottomrow.png")
