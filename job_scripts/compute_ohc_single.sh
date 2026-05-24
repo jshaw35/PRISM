@@ -17,4 +17,4 @@ if [[ -z "$INPUT_FILE" ]] || [[ -z "$OUTPUT_FILE" ]]; then
 fi
 
 mamba run -p /glade/work/jonahshaw/conda-envs/hackathon_extended \
-    python /glade/u/home/jonahshaw/Scripts/git_repos/PRISM/J09_OHC_calculation_single.py "$INPUT_FILE" "$OUTPUT_FILE"
+    python /glade/u/home/jonahshaw/Scripts/git_repos/PRISM/J10_OHC_calculation_single.py "$INPUT_FILE" "$OUTPUT_FILE"
