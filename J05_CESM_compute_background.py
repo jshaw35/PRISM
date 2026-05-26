@@ -250,12 +250,14 @@ if __name__ == "__main__":
         "CESM2_LE_2000_2009_cmip6": ["b.e21.BHISTcmip6.f09_g17.LE2-1301.00?", "CESM2_LE/d651056/CESM2-LE/atm/proc/tseries/month_1/*/b.e21.BHISTcmip6.f09_g17.LE2-1301.00?.cam.h0.*.200001-200912.nc", None],
         "CESM2_WACCM_HIST_1850_1864": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?", "CESM2_WACCM_HIST/atm/proc/tseries/month_1/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?.cam.h0.*.nc", slice("1850", "1864")],
         "CESM2_WACCM_HIST_2000_2014": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?", "CESM2_WACCM_HIST/atm/proc/tseries/month_1/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?.cam.h0.*.nc", slice("2000", "2014")],
+        "CESM2_WACCM_HIST_2015_2034": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?", "CESM2_WACCM_HIST/atm/proc/tseries/month_1/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?.cam.h0.*.nc", slice("2015", "2034")],
         "CESM2_WACCM_1850control": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001.cam.h0*", "CESM2_WACCM_1850control/atm/proc/tseries/month_1/b.e21.BW1850.f09_g17.CMIP6-piControl.001.cam.h0.*.nc", slice("0100", None)],
     }
 
     ohc_case_dict = {
         "CESM2_WACCM_HIST_1850_1864": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?", "CESM2_WACCM_HIST/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?/ocn/proc/tseries/month_1/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?.pop.h.*.nc", slice("1850", "1864")],
         "CESM2_WACCM_HIST_2000_2014": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?", "CESM2_WACCM_HIST/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?/ocn/proc/tseries/month_1/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?.pop.h.*.nc", slice("2000", "2014")],
+        "CESM2_WACCM_HIST_2015_2034": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?", "CESM2_WACCM_HIST/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?/ocn/proc/tseries/month_1/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?.pop.h.*.nc", slice("2015", "2034")],
         "CESM2_WACCM_1850control": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001.pop.h*", "CESM2_WACCM_1850control/ocn/proc/tseries/month_1/b.e21.BW1850.f09_g17.CMIP6-piControl.001.pop.h.*.nc", slice("0100", None)],
         "CESM2_WACCM_1850control_0050_0075": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001.pop.h*", "CESM2_WACCM_1850control/ocn/proc/tseries/month_1/b.e21.BW1850.f09_g17.CMIP6-piControl.001.pop.h.*.nc", slice("0050", "0075")],
     }
