@@ -57,7 +57,7 @@ if __name__ == "__main__":
     CASE = "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.001"  # adjust to actual ARISE-1.0 case name
     SUBDIR = "atm/proc/tseries/month_1"
     OCN_SUBDIR = "ocn/proc/tseries/month_1"
-    LOCAL_DIR = Path("/glade/derecho/scratch/jonahshaw/ARISE-1.0/") # JKS adjust
+    LOCAL_DIR = Path("/glade/work/jonahshaw/PRISM_data/ARISE-1.0/") # JKS adjust
 
     VARIABLES = [
         "CLDTOT", "FLNR", "FLNS", "FLNSC", "FLNT", "FLNTC", "FLNTCLR",
