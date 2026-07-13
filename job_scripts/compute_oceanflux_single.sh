@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#PBS -N ohc_compute
+#PBS -N ohf_compute
 #PBS -A UCUC0007
 #PBS -l select=1:ncpus=1:mem=8GB:ngpus=0
 #PBS -l walltime=0:05:00
