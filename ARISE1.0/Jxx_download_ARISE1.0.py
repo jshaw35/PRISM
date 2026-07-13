@@ -53,8 +53,8 @@ if __name__ == "__main__":
 
     # ---- CONFIGURE ----
     BUCKET = "ncar-cesm2-arise"
-    EXPERIMENT = "raw"          # adjust after you confirm in step 1
-    CASE = "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.001"  # adjust to actual ARISE-1.0 case name
+    EXPERIMENT = "raw"
+    CASE = "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.001"
     SUBDIR = "atm/proc/tseries/month_1"
     OCN_SUBDIR = "ocn/proc/tseries/month_1"
     LOCAL_DIR = Path("/glade/work/jonahshaw/PRISM_data/ARISE-1.0/") # JKS adjust
@@ -64,8 +64,14 @@ if __name__ == "__main__":
         "FLUT", "FSNS", "FSNSC", "FSNT", "FSNTOA", "FSNTOAC",
         "LHFLX", "PRECT", "SHFLX", "TS",
     ]
-    OCN_VARIABLES = ["TEMP", "RHO"]
+    OCN_VARIABLES = ["TEMP", "RHO", "QFLUX", "SHF"]
     # -------------------
+
+    # %%
+    # Set up cases to pull from.
+    cases = \
+        [f"b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.{member:03d}" for member in range(1, 11)] + \
+        [f"b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.{member:03d}" for member in range(1, 11)]
 
     # %%
     prefix = f"{BUCKET}/{EXPERIMENT}/{CASE}/{SUBDIR}/"
@@ -127,18 +133,18 @@ if __name__ == "__main__":
 
     print(f"\nSummary: {len(found)} files to download, {len(missing)} variables missing")
 
-    # %%# Download atm variables
-    for member in range(1, 11): 
+    # %%
+    # # Download atm variables
+    for case in cases:
         # Use the case name pattern from cell 3
-        case = f"b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.{member:03d}"
         prefix = f"{BUCKET}/{EXPERIMENT}/{case}/{SUBDIR}/"
 
-        print(f"\n--- Processing atm variables member {member} ({case}) ---")
+        print(f"\n--- Processing atm variables case {case} ---")
 
         try:
             all_files = fs.ls(prefix)
         except FileNotFoundError:
-            print(f"Directory not found for member {member}, skipping.")
+            print(f"Directory not found for case {case}, skipping.")
             continue
 
         # Identify files for this member
@@ -155,7 +161,7 @@ if __name__ == "__main__":
                 for f in available[v]:
                     found.append(f)
         
-        print(f"Found {len(found)} files to download for member {member}")
+        print(f"Found {len(found)} files to download for case {case}")
         
         # Download files
         for i, remote in enumerate(found, 1):
@@ -169,17 +175,16 @@ if __name__ == "__main__":
 
     # %%
     # Download ocn variables
-    for member in range(1, 11): 
+    for case in cases: 
         # Use the case name pattern from cell 3
-        case = f"b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.{member:03d}"
         ocn_prefix = f"{BUCKET}/{EXPERIMENT}/{case}/{OCN_SUBDIR}/"
 
-        print(f"\n--- Processing ocn variables member {member} ({case}) ---")
+        print(f"\n--- Processing ocn variables member {case} ---")
 
         try:
             all_files = fs.ls(ocn_prefix)
         except FileNotFoundError:
-            print(f"Directory not found for member {member}, skipping.")
+            print(f"Directory not found for case {case}, skipping.")
             continue
 
         # Identify files for this member
@@ -196,7 +201,7 @@ if __name__ == "__main__":
                 for f in available[v]:
                     found.append(f)
         
-        print(f"Found {len(found)} files to download for member {member}")
+        print(f"Found {len(found)} files to download for case {case}")
         
         # Download files
         for i, remote in enumerate(found, 1):
@@ -208,17 +213,4 @@ if __name__ == "__main__":
             print(f"[{i}/{len(found)}] downloading {local.name} ({size_mb:.1f} MB)")
             fs.get(remote, str(local))
 
-    # %%
-    # LOCAL_DIR.mkdir(parents=True, exist_ok=True)
-
-    # for i, remote in enumerate(found, 1):
-    #     local = LOCAL_DIR / remote.split("/")[-1]
-    #     if local.exists():
-    #         print(f"[{i}/{len(found)}] skip (exists): {local.name}")
-    #         continue
-    #     size_mb = fs.size(remote) / 1e6
-    #     print(f"[{i}/{len(found)}] downloading {local.name} ({size_mb:.1f} MB)")
-    #     fs.get(remote, str(local))
-
-    # print("Done.")
     # %%
