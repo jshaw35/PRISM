@@ -696,7 +696,11 @@ def load_ensemble_cases(datapath_subdir, case_str, varlist):
 # %%
 
 if __name__ == "__main__":
-    root_dir = "/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/"
+    machine = "curc"
+    if machine == "glade":
+        root_dir = "/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/"
+    if machine == "curc":
+        root_dir = "/home/josh2250/projects/PRISM/"
     CASE_CONFIGS1 = {
         "CESM_LME":{
             "path": root_dir + "data/RadInt_procdata/CESM_LME/",
@@ -766,7 +770,11 @@ if __name__ == "__main__":
     }
 
     # Configs for loading OHC data
-    ohc_data_root = "/glade/work/jonahshaw/PRISM_data/spatial_OHC_data/"
+    if machine == "glade":
+        ohc_data_root = "/glade/work/jonahshaw/PRISM_data/spatial_OHC_data/"
+    if machine == "curc":
+        ohc_data_root = "/pl/active/kaygroup/jshaw/RadInt_ohcdata/"
+
     CASE_CONFIGS2 = {
         "CESM2_LME": {
             "path": ohc_data_root + "CESM2_LME/",
@@ -873,7 +881,7 @@ testing = True
 if testing:
     import glob
     ocean_subcase_label = subcase_label.replace("0??", "001")
-    ohc_files = glob.glob(f"/glade/work/jonahshaw/PRISM_data/spatial_OHC_data/{case_label}/{ocean_subcase_label}/ocn/proc/tseries/month_1/{ocean_subcase_label}.pop.h.OHC.??????-??????.nc")
+    ohc_files = glob.glob(f"{ohc_data_root}/{case_label}/{ocean_subcase_label}/ocn/proc/tseries/month_1/{ocean_subcase_label}.pop.h.OHC.??????-??????.nc")
     ohc_ds = xr.open_mfdataset(ohc_files, chunks={"time": 1}, preprocess=lambda ds: ds[["OHC_global_mean"]].sel(ohc_depth=-1)).compute()
     ohf_files = glob.glob(f"/glade/work/jonahshaw/PRISM_data/spatial_oceanflux_data/{case_label}/{ocean_subcase_label}/ocn/proc/tseries/month_1/{ocean_subcase_label}.pop.h.OHF.??????-??????.nc")
     ohf_files.sort()
