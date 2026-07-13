@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(mess
 def average_spatially(
     datapath,
     verbose=False,
-    average_vars = ["CLDTOT", "FLNS", "FLNSC", "FLNT", "FLNTC", "FLNR", "FLUT", "FSNR", "FSNT", "FSNS", "FSNSC", "FSNTOA", "FSNTC", "FLNTCLR", "FSNTOAC", "LHFLX", "SHFLX", "TS", "PRECT", "PRECC", "PRECL"],
+    average_vars = ["CLDTOT", "FLNS", "FLNSC", "FLNT", "FLNTC", "FLNR", "FLUT", "FLUTC", "FSNR", "FSNT", "FSNS", "FSNSC", "FSNTOA", "FSNTC", "FLNTCLR", "FSNTOAC", "LHFLX", "SHFLX", "TS", "PRECT", "PRECC", "PRECL", "FNNT", "PRECIP_THERMO"],
 ):
     ds = xr.open_dataset(datapath)
 
@@ -23,9 +23,9 @@ def average_spatially(
         logging.info(f"Available variables: {list(ds[varlist].data_vars)}")
         return None
 
-    T_average = lon_average.weighted(np.cos(np.deg2rad(ds.lat))).mean(dim="lat")
-    T_average_SH = lon_average.sel(lat=slice(-90,0)).weighted(np.cos(np.deg2rad(ds.lat))).mean(dim="lat")
-    T_average_NH = lon_average.sel(lat=slice(0,90)).weighted(np.cos(np.deg2rad(ds.lat))).mean(dim="lat")
+    T_average = lon_average.weighted(ds["gw"]).mean(dim="lat")
+    T_average_SH = lon_average.sel(lat=slice(-90,0)).weighted(ds["gw"]).mean(dim="lat")
+    T_average_NH = lon_average.sel(lat=slice(0,90)).weighted(ds["gw"]).mean(dim="lat")
     
     T_average = T_average.assign_coords(spatial="G").expand_dims("spatial")
     T_average_SH = T_average_SH.assign_coords(spatial="SH").expand_dims("spatial")
@@ -85,6 +85,9 @@ if __name__ == "__main__":
 
     curc_cesm2_waccm_hist_datapath = "/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_WACCM_HIST/"
     curc_cesm2_waccm_hist_outpath = "/home/josh2250/projects/PRISM/data/RadInt_procdata/CESM2_WACCM_HIST/"
+
+    # fake_outpath = "/home/josh2250/projects/PRISM/data/RadInt_procdata/iEEI_test/"
+    # crawl_and_process(curc_lme_datapath, fake_outpath, average_spatially)
 
     crawl_and_process(curc_lme_datapath, curc_lme_outpath, average_spatially)
     crawl_and_process(curc_cesm2_245_datapath, curc_cesm2_245_outpath, average_spatially)

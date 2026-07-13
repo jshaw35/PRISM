@@ -8,10 +8,10 @@
 # ----------------------------------------------------------
 # #SBATCH --account=ucb762_asc1                   # Ascent Allocation on Alpine
 #SBATCH --nodes=1
-#SBATCH --time=00:59:59
+#SBATCH --time=01:59:59
 #SBATCH --partition=amilan
 #SBATCH --qos=normal
-#SBATCH --mem=8G
+#SBATCH --mem=16G
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --job-name=spatial_average_CESM_data
