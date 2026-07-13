@@ -117,7 +117,7 @@ def compute_OHC(
     ohc_per_masked = ohc_per_vol.where(kmt_mask)  # [J/(m³)]
     # Integrate OHC per unit volume over depth to get OHC per unit area
     # Total OHC
-    ohc_per_area = (ohc_per_masked * dz_m).sum(dim='z_t')  # [J/m²]
+    ohc_per_area = (ohc_per_masked * dz_m).sum(dim='z_t', skipna=True)  # [J/m²]
 
     # Get z_t where z_w_bot < 300m, 700m, 2000m
     depth_mask_300 = (ds['z_w_bot'] < 300e2).values

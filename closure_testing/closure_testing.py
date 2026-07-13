@@ -931,4 +931,99 @@ if testing:
     ax.set_ylim(0.9, 1.05)
     ax.hlines(1, ax.get_xlim()[0], ax.get_xlim()[1], colors='k', linestyles='--')
     ax.legend()
+
+# %%
+# Test calculation of iEEI
+# CESM2 LM case
+testing = True
+if testing:
+    # case_label = "CESM2_WACCM_SSP2-4.5"
+    # subcase_label = "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??"
+    # selfunc = lambda ds: ds['b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??'].isel(ens=0).sel(time=slice("2015-01-01", None))
+    case_label = "CESM2_LME"
+    subcase_label = 'b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008'
+    selfunc = lambda ds: ds[subcase_label]
+    asr_var = "FSNT"
+    olr_var = "FLNT"
+
+    asr_ds = selfunc(data_dict[case_label])[asr_var].sel(spatial="G").compute()
+    olr_ds = selfunc(data_dict[case_label])[olr_var].sel(spatial="G").compute()
+
+    # %%
+    # Manual
+    weights = get_weights_by_month2(asr_ds["time"])
+    eei_monthly = ((asr_ds - olr_ds) * weights)
+    eei_monthly_unweighted = ((asr_ds - olr_ds) * 365 / 12 * 24 * 60 * 60)
+    ieei_monthly = eei_monthly.cumsum(dim="time")
+    ieei_monthly_unweighted = eei_monthly_unweighted.cumsum(dim="time")
+    ieei_monthly_fudge = ((asr_ds - olr_ds) * weights * 2.2).cumsum(dim="time")
+
+    # Function
+    ieei_test = compute_ieei_with_start_year(asr_ds, olr_ds, 205)
+
+    # %%
+# Compare with ocean data
+testing = True
+if testing:
+    import glob
+    ocean_subcase_label = subcase_label #.replace("0??", "001")
+    ohc_files = glob.glob(f"/glade/work/jonahshaw/PRISM_data/spatial_OHC_data/{case_label}/{ocean_subcase_label}/ocn/proc/tseries/month_1/{ocean_subcase_label}.pop.h.OHC.??????-??????.nc")
+    ohc_ds = xr.open_mfdataset(ohc_files, chunks={"time": 1}, preprocess=lambda ds: ds[["OHC_global_mean"]].sel(ohc_depth=-1)).compute()
+    ohf_files = glob.glob(f"/glade/work/jonahshaw/PRISM_data/spatial_oceanflux_data/{case_label}/{ocean_subcase_label}/ocn/proc/tseries/month_1/{ocean_subcase_label}.pop.h.OHF.??????-??????.nc")
+    ohf_files.sort()
+    ohf_ds = xr.open_mfdataset(ohf_files, chunks={"time": 1}, preprocess=lambda ds: ds[["OHF_global_mean"]]).compute()
+
+# %%
+if testing:
+    test_ohc_zeroed = ohc_ds["OHC_global_mean"]
+    test_ohc_zeroed = (test_ohc_zeroed - test_ohc_zeroed.isel(time=0)).compute()
+
+    # Convert units
+    month_weights = get_weights_by_month2(ohf_ds["time"], account_for_leap=False)
+    test_ohf_weighted = ohf_ds["OHF_global_mean"] * month_weights # [W/m²] * [s] = [J/m²]
+    test_ohf_unweighted = ohf_ds["OHF_global_mean"] * 365 * 24 * 60 * 60 / 12 # [W/m²] * [s] = [J/m²]
+
+# %%
+if testing:
+    import matplotlib.pyplot as plt
+    fig, axs = plt.subplots(2, 2, figsize=(10, 10))
+    axs = axs.flat
+    component_areamismatch = 504.921 / 510.0996 # POP SA vs. CAM SA
+    surfacearea_factor = ohf_ds.attrs["ocean_area_m2"] / ohf_ds.attrs["global_area_m2"]
+    iOHF = (surfacearea_factor * test_ohf_weighted.cumsum("time"))
+    iOHF_SAcorrection = (component_areamismatch * surfacearea_factor * test_ohf_weighted.cumsum("time"))
+    OHC = component_areamismatch * test_ohc_zeroed
+    OHC_SAcorrection = (component_areamismatch * surfacearea_factor * test_ohc_zeroed)
+
+    ax = axs[0]
+    iOHF.plot(label="iOHF", ax=ax)
+    iOHF_SAcorrection.plot(label="iOHF (scaled by pop/cam SA)", ax=ax)
+    ieei_monthly.plot(label="iEEI", ax=ax)
+    OHC.plot(label="OHC", ax=ax)
+    OHC_SAcorrection.plot(label="OHC (scaled by pop/cam SA)", ax=ax)
+    ax.legend()
+
+    ax = axs[1]
+    iOHF[:120].plot(label="iOHF", ax=ax)
+    iOHF_SAcorrection[:120].plot(label="iOHF (scaled by pop/cam SA)", ax=ax)
+    ieei_monthly[:120].plot(label="iEEI", ax=ax)
+    # OHC[:120].plot(label="OHC", ax=ax)
+    OHC_SAcorrection[:120].plot(label="OHC (scaled by pop/cam SA)", ax=ax)
+    ax.legend()
+
+    ax = axs[2]
+    (iOHF / ieei_monthly).groupby("time.year").mean().plot(label="iOHF / iEEI", ax=ax)
+    (iOHF_SAcorrection / ieei_monthly).groupby("time.year").mean().plot(label="iOHF / iEEI (scaled by pop/cam SA)", ax=ax)
+    (OHC_SAcorrection / ieei_monthly).groupby("time.year").mean().plot(label="OHC / iEEI (scaled by pop/cam SA)", ax=ax)
+    ax.set_ylim(0.5, 2.0)
+    ax.hlines(1, ax.get_xlim()[0], ax.get_xlim()[1], colors='k', linestyles='--')
+    ax.legend()
+
+    ax = axs[3]
+    (iOHF / ieei_monthly).groupby("time.year").mean().plot(label="iOHF / iEEI", ax=ax)
+    (iOHF_SAcorrection / ieei_monthly).groupby("time.year").mean().plot(label="iOHF / iEEI (scaled by pop/cam SA)", ax=ax)
+    ax.set_ylim(0.5, 2.0)
+    ax.hlines(1, ax.get_xlim()[0], ax.get_xlim()[1], colors='k', linestyles='--')
+    ax.legend()
+
 # %%
