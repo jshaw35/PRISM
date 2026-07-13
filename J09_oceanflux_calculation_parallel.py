@@ -192,27 +192,6 @@ def get_weights_by_month2(
         weights = weights.sel(month=month_values)
     return weights
 
-# %%
-testing = False
-
-if testing:
-    import glob
-    ohc_files = glob.glob("/glade/work/jonahshaw/PRISM_data/spatial_OHC_data/CESM2_LME/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008/ocn/proc/tseries/month_1/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008.pop.h.OHC.??????-??????.nc")
-    # ohc_files = glob.glob("/glade/work/jonahshaw/PRISM_data/spatial_OHC_data/CESM2_LME/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002/ocn/proc/tseries/month_1/b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002.pop.h.OHC.??????-??????.nc")
-    ohc_ds = xr.open_mfdataset(ohc_files, chunks={"time": 1}, preprocess=lambda ds: ds[["OHC_global_mean"]].sel(ohc_depth=-1)).compute()
-    ohf_files = glob.glob("/glade/work/jonahshaw/PRISM_data/spatial_oceanflux_data/CESM2_LME/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008/ocn/proc/tseries/month_1/b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008.pop.h.OHF.??????-??????.nc")
-    ohf_files.sort()
-    ohf_ds = xr.open_mfdataset(ohf_files, chunks={"time": 1}, preprocess=lambda ds: ds[["OHF_global_mean"]]).compute()
-
-# %%
-if testing:
-    test_ohc_zeroed = ohc_ds["OHC_global_mean"]
-    test_ohc_zeroed = (test_ohc_zeroed - test_ohc_zeroed.isel(time=0)).compute()
-
-    # Convert units
-    month_weights = get_weights_by_month2(ohf_ds["time"], account_for_leap=False)
-    test_ohf_weighted = ohf_ds["OHF_global_mean"] * month_weights # [W/m²] * [s] = [J/m²]
-    test_ohf_unweighted = ohf_ds["OHF_global_mean"] * 365 * 24 * 60 * 60 / 12 # [W/m²] * [s] = [J/m²]
 
 # %%
 if __name__ == "__main__":
