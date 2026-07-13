@@ -95,18 +95,61 @@ def compute_thermoprecip_wrapper(
 
     # Compute the precipitation proxy variable and add it to the list of variables to average
     precip_vars = ["FLNT", "FSNT", "FLNS", "FSNS", "SHFLX"]
+    precip_vars_plus = precip_vars + ["gw"]
     precip_files = [filepath.replace(match_str, _var) for _var in precip_vars]
     for _file in precip_files:
         assert os.path.exists(_file), f"{_file} does not exist"
     try:
-        ds_merged = xr.open_mfdataset(precip_files, combine="by_coords", preprocess=lambda x: x.drop_vars(["time_written", "date_written"], errors="ignore"))[precip_vars]
+        ds_merged = xr.open_mfdataset(precip_files, combine="by_coords", preprocess=lambda x: x.drop_vars(["time_written", "date_written"], errors="ignore"))
     except:
         logging.info(precip_files)
+    ds_merged = ds_merged[precip_vars_plus]
     precip_ds = compute_thermoprecip(ds_merged)
+    precip_ds = xr.merge([precip_ds, ds_merged["gw"]])
     logging.info(f"Writing: {save_path}")
     os.path.dirname(save_path)
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     precip_ds.to_netcdf(save_path)
+    return 1
+
+def compute_toaimbalance_wrapper(
+    filepath: str,
+    match_var: str,
+    var_detect_str: str = "h0",
+):
+
+    # Parse the variable name from the test path, assuming it is in the format of "case/atm/proc/tseries/month_1/case.cam.h0.VAR.nc"
+    filename = os.path.splitext(os.path.basename(filepath))[0]
+    name_parts = filename.split(".")
+    marker_idx = name_parts.index(var_detect_str)
+    test_var = name_parts[marker_idx + 1]
+    if test_var != match_var:
+        return 1
+    save_path = filepath.replace(match_var, "FNNT")
+    if os.path.exists(save_path):
+        logging.info(f"{save_path} already exists")
+        return 1
+
+    # Compute the precipitation proxy variable and add it to the list of variables to average
+    toanet_vars = ["FLNT", "FSNT"]
+    toanet_vars_plus = toanet_vars + ["gw"]
+    toanet_files = [filepath.replace(match_str, _var) for _var in toanet_vars]
+    for _file in toanet_files:
+        assert os.path.exists(_file), f"{_file} does not exist"
+    try:
+        ds_merged = xr.open_mfdataset(toanet_files, combine="by_coords", preprocess=lambda x: x.drop_vars(["time_written", "date_written"], errors="ignore"))
+    except:
+        logging.info(toanet_files)
+    ds_merged = ds_merged[toanet_vars_plus]
+    toanet_ds = ds_merged["FSNT"] - ds_merged["FLNT"]
+    toanet_ds.attrs["long_name"] = "Top-of-model net radiation (FSNT - FLNT)"
+    toanet_ds.attrs["units"] = "W/m^-2"
+    toanet_ds.name = "FNNT"
+    toanet_ds = xr.merge([toanet_ds, ds_merged["gw"]])
+    logging.info(f"Writing: {save_path}")
+    os.path.dirname(save_path)
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    toanet_ds.to_netcdf(save_path)
     return 1
 
 
@@ -135,6 +178,13 @@ if __name__ == "__main__":
             input_dir=rawdata_root / case,
             output_dir=None,
             process_fn=compute_thermoprecip_wrapper,
+            match_var=match_str,
+        )
+
+        crawl_and_process2(
+            input_dir=rawdata_root / case,
+            output_dir=None,
+            process_fn=compute_toaimbalance_wrapper,
             match_var=match_str,
         )
 
