@@ -208,9 +208,11 @@ __marimo__/
 
 munged_data/
 data/RadInt_procdata/
+data/RadInt_procdata_old/
 data/error_relativetobaseline/
 data/control_baselines/
 data/control_baselines_ohc/
 data/spatial_maps/
 data/spatial_maps_ohc/
+data/spatial_maps_ohc_old/
 job_logs/

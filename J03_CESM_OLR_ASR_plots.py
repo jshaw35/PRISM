@@ -464,6 +464,7 @@ if __name__ == "__main__":
     cbar = outs_list[0][-1][-1]
     cbar.set_ticks(cbar_ticks)
 
+    # %%
     fig.savefig("figures/figure1_bottomrow.png", dpi=300, bbox_inches='tight')
     logging.info("Saved figure1_bottomrow.png")
     plt.close(fig)

@@ -6,7 +6,7 @@
 # #SBATCH --account=ucb762_asc1                   # Ascent Allocation on Alpine
 #SBATCH --nodes=1
 #SBATCH --time=00:14:59
-#SBATCH --partition=amilan
+#SBATCH --partition=acpu
 #SBATCH --qos=normal
 #SBATCH --mem=8G
 #SBATCH --ntasks=1
@@ -70,14 +70,14 @@ else
     echo "${FILE} already exists"
 fi
 
-FILE=../zipped_data/CESM2_WACCM_1850control.zip
+FILE=../zipped_data/CESM2_WACCM_1850control_data.zip
 if [ ! -e ${FILE} ]; then 
     zip -r ${FILE} RadInt_procdata/CESM2_WACCM_1850control
 else
     echo "${FILE} already exists"
 fi
 
-FILE=../zipped_data/CESM2_WACCM_HIST.zip
+FILE=../zipped_data/CESM2_WACCM_HIST_data.zip
 if [ ! -e ${FILE} ]; then 
     zip -r ${FILE} RadInt_procdata/CESM2_WACCM_HIST
 else

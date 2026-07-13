@@ -119,3 +119,13 @@ __Processes OHC data:__
 find /glade/work/jonahshaw/PRISM_data/spatial_OHC_data -wholename "*nc"
 
 ./job_scripts/gdex_file_transfer.sh "*nc" /glade/work/jonahshaw/PRISM_data/spatial_OHC_data josh2250@login.rc.colorado.edu:/home/josh2250/kaydata/jshaw/RadInt_ohcdata/
+
+__Transfer ARISE-1.0:__
+
+
+
+__Targeted Remove of Files:__
+
+find . -name 'pattern' -exec rm {} \;
+find /home/josh2250/kaydata/jshaw/RadInt_rawdata/ -wholename "*month**.PRECIP_THERMO.*" -exec rm {} \;
+find /home/josh2250/kaydata/jshaw/RadInt_rawdata/ -wholename "*month**.FNNT.*" -exec rm {} \;

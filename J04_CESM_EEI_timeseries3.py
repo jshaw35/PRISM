@@ -72,13 +72,16 @@ def compute_iEEI(
 
     weights = get_weights_by_month2(time_ds, account_for_leap)
     eei_ds = asr_ds - olr_ds
-    ieei_ds = np.cumsum(eei_ds * weights)
+    ieei_ds = np.cumsum(eei_ds * weights) # J/m^2
+
+    return ieei_ds
 
     # Convert to Watt by multipling by the Earth's surface area
-    earth_radius = 6371e3 # meters
-    earth_SA = 4 * np.pi * earth_radius**2
+    # CESM2 6.37122e6 m
+    # earth_radius = 6371e3 # kilometers
+    # earth_SA = 4 * np.pi * earth_radius**2
 
-    return earth_SA * ieei_ds
+    # return earth_SA * ieei_ds
 
 
 def get_weights_by_month2(
@@ -688,7 +691,15 @@ def load_ensemble_cases(datapath_subdir, case_str, varlist):
             return None
         
         # Concatenate all ensembles along the 'ens' dimension
-        combined_ds = xr.concat(ensemble_datasets, dim='ens')
+        try:
+            combined_ds = xr.concat(ensemble_datasets, dim='ens')
+        except ValueError as e:
+            logging.error(f"Processing Error: {e}")
+            # Only include variables in all datasets
+            common_vars = ensemble_datasets
+            for _ds in ensemble_datasets:
+                common_vars = list(set(common_vars) & set(_ds.data_vars))
+            logging.info(f"Only using common variables: {common_vars}")
 
         return combined_ds
 
@@ -696,7 +707,11 @@ def load_ensemble_cases(datapath_subdir, case_str, varlist):
 # %%
 
 if __name__ == "__main__":
-    root_dir = "/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/"
+    machine = "curc"
+    if machine == "glade":
+        root_dir = "/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/"
+    elif machine == "curc":
+        root_dir = "/home/josh2250/projects/PRISM/"
     CASE_CONFIGS1 = {
         "CESM_LME":{
             "path": root_dir + "data/RadInt_procdata/CESM_LME/",
@@ -766,7 +781,10 @@ if __name__ == "__main__":
     }
 
     # Configs for loading OHC data
-    ohc_data_root = "/glade/work/jonahshaw/PRISM_data/spatial_OHC_data/"
+    if machine == "glade":
+        ohc_data_root = "/glade/work/jonahshaw/PRISM_data/spatial_OHC_data/"
+    elif machine == "curc":
+        ohc_data_root = "/home/josh2250/kaydata/jshaw/RadInt_ohcdata/"
     CASE_CONFIGS2 = {
         "CESM2_LME": {
             "path": ohc_data_root + "CESM2_LME/",
@@ -829,15 +847,18 @@ if __name__ == "__main__":
 
     # %%
     # Load the data using the generalized loading function
-    data_varlist = ['CLDTOT', 'FLNR', 'FLNS', 'FLNSC', 'FLNT', 'FLNTC', 'FLNTCLR', 'FLUT', 'FSNR', 'FSNS', 'FSNSC', 'FSNT', 'FSNTC', 'FSNTOA', 'FSNTOAC', 'LHFLX', 'SHFLX', 'TS', "PRECT", "PRECC", "PRECL", "PRECIP_THERMO"]
+    data_varlist = ['FLNT', 'FSNT', 'FNNT', 'TS'] # ['CLDTOT', 'FLNS', 'FLNSC', 'FLNT', 'FLUT', 'FSNS', 'FSNT', 'LHFLX', 'SHFLX', 'TS', "PRECIP_THERMO", "FNNT"] # "PRECT", "PRECC", "PRECL", 'FLNR', 'FSNR', 'FLNTC', 'FLNTCLR', 'FSNSC', 'FSNTC', 'FSNTOA', 'FSNTOAC',
     year_dim = "time"
     ohc_varlist = ["OHC"]
 
-    # Load data using the generalized function
+    # Load data using the generalized function (requires 4 nodes on CURC)
     data_dict = load_data_with_configs(CASE_CONFIGS1, data_varlist, year_dim=year_dim)
     ohc_dict = load_data_with_configs(CASE_CONFIGS2, ohc_varlist, year_dim=year_dim)
 
     # %%
+    # CAM global surface area: 
+    earth_radius_cam = 6.37122e6
+    earth_SA_cam = 4 * np.pi * earth_radius_cam**2
     PLOT_CONFIGS1 = {
         "CESM_LME": {
             "selfunc": lambda ds: ds['b.e11.BLMTRC5CN.f19_g16.00?'].sel(ens="002"),
@@ -846,9 +867,9 @@ if __name__ == "__main__":
             "ax1_lims": (230, 240),
             "ax2_lims": (-8, 2),
             "ax1_major_y": MultipleLocator(1),
-            "axb1_lims": (-1.5e24, 1.5e24),
+            # "axb1_lims": (-1.5e24, 1.5e24),
             "axb2_lims": (286.25, 287.75),
-            "axb1_yticks": np.arange(-1.5e24, 1.5e24+0.01e24, 0.5e24),
+            # "axb1_yticks": np.arange(-1.5e24, 1.5e24+0.01e24, 0.5e24),
             "axb2_yticks": np.arange(286.25, 287.75+0.01, 0.25),
             "xlims": (850, 1850),
             "keep_left_axes": True,
@@ -856,17 +877,19 @@ if __name__ == "__main__":
         },
         "CESM2_LME": {
             "selfunc": lambda ds: ds['b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002'],
-            "selfunc_ohc": lambda ds: ds['b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002']["OHC_global_mean"].sel(ohc_depth=-1) * ds['b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002'].attrs["ocean_area_m2"],
+            # "selfunc_ohc": lambda ds: ds['b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002']["OHC_global_mean"].sel(ohc_depth=-1) * ds['b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002'].attrs["ocean_area_m2"] / ds['b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002'].attrs["global_area_m2"],
+            "selfunc_ohc": lambda ds: ds['b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002']["OHC_global_mean"].sel(ohc_depth=-1) * ds['b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002'].attrs["ocean_area_m2"] / earth_SA_cam,
             # "ax1_lims": (235, 244),
             # "ax2_lims": (-3, 6),
             "ax1_lims": (237, 247),
             "ax2_lims": (-8, 2),
             "ax1_major_y": MultipleLocator(1),
-            "axb1_lims": (-0.5e24, 1.0e24),
             "axb2_lims": (287.0, 289.5),
-            # "axb1_lims": (-0.5e24, 1.0e24),
             # "axb2_lims": (287.0, 289.5),
-            "axb1_yticks": np.arange(-0.5e24, 1.25e24+0.01e24, 0.25e24),
+            # "axb1_lims": (-0.5e24, 1.0e24),
+            "axb1_lims": (-1.0e9, 2.25e9),
+            "axb1_yticks": np.arange(-1.0e9, 2.25e9, 0.5e9),
+            # "axb1_yticks": np.arange(-0.5e24, 1.25e24+0.01e24, 0.25e24),
             "axb2_yticks": np.arange(286.5, 290.0+0.01, 0.5),
             "xlims": (850, 1850),
             "keep_left_axes": True,
@@ -874,17 +897,20 @@ if __name__ == "__main__":
         },
         "CESM2_WACCM_1850control": {
             "selfunc": lambda ds: ds['b.e21.BW1850.f09_g17.CMIP6-piControl.001'],
-            "selfunc_ohc": lambda ds: ds['b.e21.BW1850.f09_g17.CMIP6-piControl.001']["OHC_global_mean"].sel(ohc_depth=-1) * ds['b.e21.BW1850.f09_g17.CMIP6-piControl.001'].attrs["ocean_area_m2"],
+            "selfunc_ohc": lambda ds: ds['b.e21.BW1850.f09_g17.CMIP6-piControl.001']["OHC_global_mean"].sel(ohc_depth=-1) * ds['b.e21.BW1850.f09_g17.CMIP6-piControl.001'].attrs["ocean_area_m2"] / earth_SA_cam,
+            # "selfunc_ohc": lambda ds: ds['b.e21.BW1850.f09_g17.CMIP6-piControl.001']["OHC_global_mean"].sel(ohc_depth=-1) * ds['b.e21.BW1850.f09_g17.CMIP6-piControl.001'].attrs["ocean_area_m2"] / ds['b.e21.BW1850.f09_g17.CMIP6-piControl.001'].attrs["global_area_m2"],
             # "ax1_lims": (235, 244),
             # "ax2_lims": (-3, 6),
             "ax1_lims": (237, 247),
             "ax2_lims": (-8, 2),
             "ax1_major_y": MultipleLocator(1),
-            "axb1_lims": (-0.5e24, 1.0e24),
+            # "axb1_lims": (-0.5e24, 1.0e24),
             "axb2_lims": (287.0, 289.5),
+            "axb1_lims": (-0.1e9, 1.9e9),
+            "axb1_yticks": np.arange(0, 1.9e9, 0.25e9),
             # "axb1_lims": (-0.5e24, 1.0e24),
             # "axb2_lims": (287.0, 289.5),
-            "axb1_yticks": np.arange(-0.5e24, 1.25e24+0.01e24, 0.25e24),
+            # "axb1_yticks": np.arange(-0.5e24, 1.25e24+0.01e24, 0.25e24),
             "axb2_yticks": np.arange(286.5, 290.0+0.01, 0.5),
             "xlims": (1, 500),
             "keep_left_axes": True,
@@ -935,17 +961,17 @@ if __name__ == "__main__":
         ohc_annual = weighted_annualmean(ohc_ds) if ohc_ds is not None else None
         
         # Compute decadal means and center
-        asr_decadal = compute_decadal(asr_ds)
-        olr_decadal = compute_decadal(olr_ds)
-        ts_decadal = compute_decadal(ts_ds)
+        asr_decadal = compute_decadal2(asr_ds)
+        olr_decadal = compute_decadal2(olr_ds)
+        ts_decadal = compute_decadal2(ts_ds)
         eei_decadal = asr_decadal - olr_decadal
-        ohc_decadal = compute_decadal(ohc_ds) if ohc_ds is not None else None
+        ohc_decadal = compute_decadal2(ohc_ds) if ohc_ds is not None else None
         # Compute iEEI starting from appropriate year for each case
         ieei_ds = compute_ieei_with_start_year(asr_ds, olr_ds, startyears_dict[case_label])
         
         # Create annual and decadal means for iEEI by grouping years
         ieei_annual = weighted_annualmean(ieei_ds)
-        ieei_decadal = compute_decadal(ieei_ds)
+        ieei_decadal = compute_decadal2(ieei_ds)
         
         # Plot ASR, OLR, and EEI
         ax1, ax2, ax3 = plot_eei_timeseries(
@@ -1021,19 +1047,23 @@ if __name__ == "__main__":
             bottom_handles, bottom_labels, loc='lower right', 
             fontsize=12, framealpha=0.95,
         )
+    # %%
     fig.savefig("figures/figure3b_toprow.png", dpi=300, bbox_inches='tight')
     logging.info("Saved figure3b_toprow.png")
     plt.close(fig)
 
     # %%
+    earth_radius_cam = 6.37122e6
+    earth_SA_cam = 4 * np.pi * earth_radius_cam**2
     PLOT_CONFIGS2 = {
         'CESM2_WACCM_SSP2-4.5': {
             "selfunc": lambda ds: ds['b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??'].mean("ens"),
-            "selfunc_ohc": lambda ds: ds['b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??']["OHC_global_mean"].sel(ohc_depth=-1).mean("ens") * ds['b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??'].attrs["ocean_area_m2"],
+            "selfunc_ohc": lambda ds: ds['b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??']["OHC_global_mean"].sel(ohc_depth=-1).mean("ens") * ds['b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??'].attrs["ocean_area_m2"] / earth_SA_cam,
+            # "selfunc_ohc": lambda ds: ds['b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??']["OHC_global_mean"].sel(ohc_depth=-1).mean("ens") * ds['b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??'].attrs["ocean_area_m2"] / ds['b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??'].attrs["global_area_m2"],
             "ax1_lims": (236, 245),
             "ax2_lims": (-5, 4),
             # "axb1_lims": (0.0e24, 2.5e24),
-            "axb1_lims": (-0.5e24, 3.0e24),
+            # "axb1_lims": (-0.5e24, 3.0e24),
             "axb2_lims": (286.0, 293.0),
             "xlims": (1850, 2100),
             "keep_left_axes": True,
@@ -1041,12 +1071,13 @@ if __name__ == "__main__":
         },
         "ARISE-SAI": {
             "selfunc": lambda ds: ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?'].mean("ens"),
-            "selfunc_ohc": lambda ds: ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?']["OHC_global_mean"].sel(ohc_depth=-1).mean("ens") * ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?'].attrs["ocean_area_m2"],
-            # "selfunc": lambda ds: ds['b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?'].set_index(ens="ens").sel(ens="001"),
+            "selfunc_ohc": lambda ds: ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?']["OHC_global_mean"].sel(ohc_depth=-1).mean("ens") * ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?'].attrs["ocean_area_m2"] / earth_SA_cam,
+            # "selfunc_ohc": lambda ds: ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?']["OHC_global_mean"].sel(ohc_depth=-1).mean("ens") * ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?'].attrs["ocean_area_m2"] / ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?'].attrs["global_area_m2"],
+            # "selfunc_ohc": lambda ds: ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?']["OHC_global_mean"].sel(ohc_depth=-1).mean("ens"),
             "ax1_lims": (236, 245),
             "ax2_lims": (-5, 4),
             # "axb1_lims": (0.0e24, 2.5e24),
-            "axb1_lims": (-0.5e24, 3.0e24),
+            # "axb1_lims": (-0.5e24, 3.0e24),
             "axb2_lims": (286.0, 293.0),
             "xlims": (1850, 2100),
             "keep_left_axes": False,
@@ -1054,11 +1085,12 @@ if __name__ == "__main__":
         },
         "CESM2_WACCM_SSP2-4.5_MCB": {
             "selfunc": lambda ds: ds['b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?'].mean("ens"),
-            "selfunc_ohc": lambda ds: ds['b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?']["OHC_global_mean"].sel(ohc_depth=-1).mean("ens") * ds['b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?'].attrs["ocean_area_m2"],
+            "selfunc_ohc": lambda ds: ds['b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?']["OHC_global_mean"].sel(ohc_depth=-1).mean("ens") * ds['b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?'].attrs["ocean_area_m2"] / earth_SA_cam,
+            # "selfunc_ohc": lambda ds: ds['b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?']["OHC_global_mean"].sel(ohc_depth=-1).mean("ens") * ds['b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?'].attrs["ocean_area_m2"] / ds['b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?'].attrs["global_area_m2"],
             "ax1_lims": (236, 245),
             "ax2_lims": (-5, 4),
             # "axb1_lims": (0.0e24, 2.5e24),
-            "axb1_lims": (-0.5e24, 3.0e24),
+            # "axb1_lims": (-0.5e24, 3.0e24),
             "axb2_lims": (286.0, 293.0),
             "xlims": (1850, 2100),
             "keep_left_axes": False,
@@ -1106,18 +1138,18 @@ if __name__ == "__main__":
         ohc_annual = weighted_annualmean(ohc_ds) if ohc_ds is not None else None
 
         # Compute decadal means
-        asr_decadal = compute_decadal(asr_ds)
-        olr_decadal = compute_decadal(olr_ds)
-        ts_decadal = compute_decadal(ts_ds)
+        asr_decadal = compute_decadal2(asr_ds)
+        olr_decadal = compute_decadal2(olr_ds)
+        ts_decadal = compute_decadal2(ts_ds)
         eei_decadal = asr_decadal - olr_decadal
-        ohc_decadal = compute_decadal(ohc_ds) if ohc_ds is not None else None
+        ohc_decadal = compute_decadal2(ohc_ds) if ohc_ds is not None else None
         
         # Compute iEEI starting from start_year_2
         ieei_ds = compute_ieei_with_start_year(asr_ds, olr_ds, start_year_2)
         
         # Create annual and decadal means for iEEI by grouping years
         ieei_annual = weighted_annualmean(ieei_ds)
-        ieei_decadal = compute_decadal(ieei_ds)
+        ieei_decadal = compute_decadal2(ieei_ds)
 
         # Plot
         ax1, ax2, ax3 = plot_eei_timeseries(
@@ -1172,16 +1204,17 @@ if __name__ == "__main__":
     
     # Create a single legend for the left column
     if top_handles and top_labels:
-        ax1.legend(
-            top_handles, top_labels, loc='lower right', 
+        axes[0,0].legend(
+            top_handles, top_labels, loc='upper left', 
             fontsize=12, framealpha=0.95,
         )
     if bottom_handles and bottom_labels:
-        axb.legend(
-            bottom_handles, bottom_labels, loc='lower right', 
+        axes[1,0].legend(
+            bottom_handles, bottom_labels, loc='upper left', 
             fontsize=12, framealpha=0.95,
         )
 
+    # %%
     fig.savefig("figures/figure3b_bottomrow.png", dpi=300, bbox_inches='tight')
     logging.info("Saved figure3b_bottomrow.png")
     plt.close(fig)
