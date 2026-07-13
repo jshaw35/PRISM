@@ -9,8 +9,8 @@ unzip -n zipped_data/CESM2_SSP245_data.zip -d data/
 unzip -n zipped_data/CESM2_SSP245_ARISE_data.zip -d data/
 unzip -n zipped_data/CESM2_SSP245_MCB_data.zip -d data/
 unzip -n zipped_data/CESM2_1850control_data.zip -d data/
-unzip -n zipped_data/CESM2_WACCM_1850control.zip -d data/
-unzip -n zipped_data/CESM2_WACCM_HIST.zip -d data/
+unzip -n zipped_data/CESM2_WACCM_1850control_data.zip -d data/
+unzip -n zipped_data/CESM2_WACCM_HIST_data.zip -d data/
 
 # Control baselines
 unzip -n zipped_data/control_baselines.zip -d data
