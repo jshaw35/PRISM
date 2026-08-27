@@ -15,6 +15,7 @@ dependencies:
   - netcdf4
   - jupyterlab
   - ipykernel
+  - ipywidgets
   - pip
 
   - pip:
