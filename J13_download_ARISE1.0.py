@@ -64,7 +64,7 @@ if __name__ == "__main__":
         "FLUT", "FSNS", "FSNSC", "FSNT", "FSNTOA", "FSNTOAC",
         "LHFLX", "PRECT", "SHFLX", "TS",
     ]
-    OCN_VARIABLES = ["TEMP", "RHO", "QFLUX", "SHF"]
+    OCN_VARIABLES = ["TEMP", "RHO", "QFLUX", "SHF", "SSH"]
     # -------------------
 
     # %%
