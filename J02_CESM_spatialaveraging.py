@@ -9,9 +9,22 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(mess
 
 def average_spatially(
     datapath,
-    verbose=False,
     average_vars = ["CLDTOT", "FLNS", "FLNSC", "FLNT", "FLNTC", "FLNR", "FLUT", "FLUTC", "FSNR", "FSNT", "FSNS", "FSNSC", "FSNTOA", "FSNTC", "FLNTCLR", "FSNTOAC", "LHFLX", "SHFLX", "TS", "PRECT", "PRECC", "PRECL", "FNNT", "PRECIP_THERMO"],
+    var_detect_str: str = "h0",
 ):
+    # Parse the variable name from the test path, assuming it is in the format of "case/atm/proc/tseries/month_1/case.cam.h0.VAR.nc"
+    filename = os.path.splitext(os.path.basename(datapath))[0]
+    filename = filename + ".nc"
+    name_parts = filename.split(".")
+    # Skip if not a h0 file
+    try:
+        marker_idx = name_parts.index(var_detect_str)
+    except ValueError:
+        return None, None
+    test_var = name_parts[marker_idx + 1]
+    if not (test_var in average_vars):
+        return None, None
+    
     ds = xr.open_dataset(datapath)
 
     varlist = [i for i in list(ds.data_vars) if i in average_vars]
@@ -32,71 +45,65 @@ def average_spatially(
     T_average_NH = T_average_NH.assign_coords(spatial="NH").expand_dims("spatial")
 
     out = xr.combine_by_coords([T_average, T_average_SH, T_average_NH])
-    return out
+    # Do not rename, just save to a separate directory.
+    return out, filename
 
 
-def crawl_and_process(input_dir, output_dir, process_fn):
+def crawl_and_process2(input_dir, output_dir, process_fn, **fn_args):
     for root, _, files in os.walk(input_dir):
         rel_root = os.path.relpath(root, input_dir)
-        out_root = output_dir if rel_root == "." else os.path.join(output_dir, rel_root)
-        os.makedirs(out_root, exist_ok=True)
         for name in files:
+            # Only look for monthly files
+            if "h0" not in name:
+                continue
             src = os.path.join(root, name)
-            dst = os.path.join(out_root, name)
-            if os.path.exists(dst):
-                logging.info(f"{dst} already exists")
-                continue
-            logging.info(f"Processing {src}")
-            data = process_fn(src)
+            data, filename = process_fn(src, **fn_args)
+            # Fail gracefully
             if data is None:
-                logging.error(f"Failed to process {src}")
                 continue
-            logging.info(f"Writing {dst}")
-            data.to_netcdf(dst)
+            if output_dir is not None:
+                out_root = output_dir if rel_root == "." else os.path.join(output_dir, rel_root)
+                dst = os.path.join(out_root, filename)
+                if os.path.exists(dst):
+                    logging.info(f"{dst} already exists")
+                    continue
+                os.makedirs(out_root, exist_ok=True)
+                logging.info(f"Writing {dst}")
+                data.to_netcdf(dst)
 
 
+# %%
 if __name__ == "__main__":
-    curc_lme_datapath = "/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM_LME/"
-    curc_lme_outpath = "/home/josh2250/projects/PRISM/data/RadInt_procdata/CESM_LME/"
+    machine = "glade"
+    if machine == "glade":
+        savepath_root = "/glade/work/jonahshaw/PRISM_data/spatial_averages_data/"
 
-    curc_cesm2_245_datapath = "/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_WACCM_SSP2-4.5/"
-    curc_cesm2_245_outpath = "/home/josh2250/projects/PRISM/data/RadInt_procdata/CESM2_WACCM_SSP2-4.5/"
+    case_dict = {
+        "ARISE-1.0": ["/glade/work/jonahshaw/PRISM_data/ARISE-1.0/"],
+        "ARISE_SAI": ["/gdex/data/d651059/ARISE-SAI-1.5"],
+        "CESM2_LME": ["/gdex/data/d651078"],
+        "CESM2_WACCM_SSP2-4.5": ["/gdex/data/d651045/CESM2-WACCM-SSP245"],
+        "CESM2_WACCM_SSP2-4.5_MCB": ["/gdex/data/d314006"],
+        "CESM2_WACCM_1850control": ["/glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/", ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"]],
+        "CESM2_WACCM_HIST": ["/glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/", ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001", "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.002", "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.003"]],
+    }
 
-    curc_ariseSAI_datapath = "/home/josh2250/kaydata/jshaw/RadInt_rawdata/ARISE_SAI/"
-    curc_ariseSAI_outpath = "/home/josh2250/projects/PRISM/data/RadInt_procdata/ARISE_SAI/"
+    for case in case_dict:
+        load_paths = case_dict.get(case, [])
+        if len(load_paths) == 1:
+            load_path_list = [load_paths[0]]
+            save_path_list = [case]
+        elif len(load_paths) == 2:
+            load_path_list = [load_paths[0] + subcase for subcase in load_paths[1]]
+            save_path_list = [case + "/" + subcase for subcase in load_paths[1]]
 
-    curc_cesm2_lme_datapath = "/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_LME/"
-    curc_cesm2_lme_outpath = "/home/josh2250/projects/PRISM/data/RadInt_procdata/CESM2_LME/"
+        for load_path, save_path in zip(load_path_list, save_path_list):
+            logging.info(f"Processing case: {load_path}")
+            crawl_and_process2(
+                input_dir=load_path,
+                output_dir=f"{savepath_root}/{save_path}",
+                process_fn=average_spatially,
+            )
 
-    curc_cesm2_le_datapath = "/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_LE/"
-    curc_cesm2_le_outpath = "/home/josh2250/projects/PRISM/data/RadInt_procdata/CESM2_LE/"
 
-    curc_cesm2_mcb_datapath = "/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_WACCM_SSP2-4.5_MCB/"
-    curc_cesm2_mcb_outpath = "/home/josh2250/projects/PRISM/data/RadInt_procdata/CESM2_WACCM_SSP2-4.5_MCB/"
-
-    curc_cesm2_1850control_datapath = "/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_1850control/"
-    curc_cesm2_1850control_outpath = "/home/josh2250/projects/PRISM/data/RadInt_procdata/CESM2_1850control/"
-
-    curc_cesm2_sf_datapath = "/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_SF/"
-    curc_cesm2_sf_outpath = "/home/josh2250/projects/PRISM/data/RadInt_procdata/CESM2_SF/"
-
-    curc_cesm2_waccm_control_datapath = "/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_WACCM_1850control/"
-    curc_cesm2_waccm_control_outpath = "/home/josh2250/projects/PRISM/data/RadInt_procdata/CESM2_WACCM_1850control/"
-
-    curc_cesm2_waccm_hist_datapath = "/home/josh2250/kaydata/jshaw/RadInt_rawdata/CESM2_WACCM_HIST/"
-    curc_cesm2_waccm_hist_outpath = "/home/josh2250/projects/PRISM/data/RadInt_procdata/CESM2_WACCM_HIST/"
-
-    # fake_outpath = "/home/josh2250/projects/PRISM/data/RadInt_procdata/iEEI_test/"
-    # crawl_and_process(curc_lme_datapath, fake_outpath, average_spatially)
-
-    crawl_and_process(curc_lme_datapath, curc_lme_outpath, average_spatially)
-    crawl_and_process(curc_cesm2_245_datapath, curc_cesm2_245_outpath, average_spatially)
-    crawl_and_process(curc_ariseSAI_datapath, curc_ariseSAI_outpath, average_spatially)
-    crawl_and_process(curc_cesm2_lme_datapath, curc_cesm2_lme_outpath, average_spatially)
-    crawl_and_process(curc_cesm2_le_datapath, curc_cesm2_le_outpath, average_spatially)
-    crawl_and_process(curc_cesm2_mcb_datapath, curc_cesm2_mcb_outpath, average_spatially)
-    crawl_and_process(curc_cesm2_1850control_datapath, curc_cesm2_1850control_outpath, average_spatially)
-    crawl_and_process(curc_cesm2_sf_datapath, curc_cesm2_sf_outpath, average_spatially)
-    crawl_and_process(curc_cesm2_waccm_control_datapath, curc_cesm2_waccm_control_outpath, average_spatially)
-    crawl_and_process(curc_cesm2_waccm_hist_datapath, curc_cesm2_waccm_hist_outpath, average_spatially)
-
+# %%
