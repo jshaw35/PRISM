@@ -101,6 +101,10 @@ def compute_oceanflux(
     
     # Convert TAREA from cm² to m²
     tarea_m2 = ds['TAREA'] / 1e4  # [m²]
+    if np.isnan(tarea_m2).any():
+        # ARISE 1.0 data includes nans which causes errors. Replace with zeros.
+        tarea_m2 = tarea_m2.where(~np.isnan(tarea_m2), 0)
+        # But this means that the global surface area will be underestimated so do not produce it.
 
     # Ocean mask (0=land, >0=ocean)
     kmt = ds['KMT']
@@ -112,7 +116,8 @@ def compute_oceanflux(
     global_mean_oceanflux.name = "OHF_global_mean"
 
     # Compute global and ocean surface areas to include in metadata
-    global_area = (tarea_m2).sum(["nlat", "nlon"])
+    if not np.isnan(ds['TAREA']).any():
+        global_area = (tarea_m2).sum(["nlat", "nlon"])
     ocean_area = (tarea_m2.where(ds["KMT"]>0)).sum(["nlat", "nlon"])
 
     oceanflux_ds.attrs["long_name"] = "Total Ocean Heat Flux per unit area"
@@ -121,7 +126,9 @@ def compute_oceanflux(
 
     ohf_ds = xr.merge([oceanflux_ds, global_mean_oceanflux])
     ohf_ds.attrs["description"] = "Total Ocean Heat Flux calculated from CESM2/POP2 output (SHF + QFLUX). The global mean Ocean Heat Flux is also provided as a separate variable."
-    ohf_ds.attrs["global_area_m2"] = global_area.values
+
+    if not np.isnan(ds['TAREA']).any():
+        ohf_ds.attrs["global_area_m2"] = global_area.values
     ohf_ds.attrs["ocean_area_m2"] = ocean_area.values
 
     return ohf_ds.compute()
@@ -230,6 +237,13 @@ if __name__ == "__main__":
                 "CMIP6-MCB-???PCT/ocn/month_1/",
                 "MCB-050PCT-ensm*/ocn/month_1/",
                 "Baseline/ocn/month_1/",
+            ]
+        },
+        "ARISE-1.0": {
+            "data_dir": "/glade/work/jonahshaw/PRISM_data/ARISE-1.0/",
+            "file_patterns": [
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??/ocn/proc/tseries/month_1/",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??/ocn/proc/tseries/month_1/",
             ]
         },
         # Add more cases as needed

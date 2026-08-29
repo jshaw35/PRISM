@@ -102,6 +102,10 @@ def compute_OHC(
     
     # Convert TAREA from cm² to m²
     tarea_m2 = ds['TAREA'] / 1e4  # [m²]
+    if np.isnan(tarea_m2).any():
+        # ARISE 1.0 data includes nans which causes errors. Replace with zeros.
+        tarea_m2 = tarea_m2.where(~np.isnan(tarea_m2), 0)
+        # But this means that the global surface area will be underestimated so do not produce it.
 
     # Ocean mask (0=land, >0=ocean)
     kmt = ds['KMT']
@@ -135,7 +139,8 @@ def compute_OHC(
     ohc_per_area = ohc_per_area.where(kmt_mask)  # Mask the final OHC per area to ocean points only
 
     # Compute global and ocean surface areas to include in metadata
-    global_area = (ds['TAREA'] * 1e-4).sum(["nlat", "nlon"])
+    if not np.isnan(ds['TAREA']).any():
+        global_area = (ds['TAREA'] * 1e-4).sum(["nlat", "nlon"])
     ocean_area = (ds['TAREA'].where(ds["KMT"]>0) * 1e-4).sum(["nlat", "nlon"])
 
     ohc_per_area.attrs["long_name"] = "Ocean Heat Content per unit area"
@@ -150,10 +155,13 @@ def compute_OHC(
 
     ohc_ds = xr.merge([ohc_per_area, global_mean_ohc])
     ohc_ds.attrs["description"] = "Ocean Heat Content calculated from CESM2/POP2 output using the equation of state. OHC is calculated as the integral of rho * c_p * dT over the ocean volume, and then averaged over the ocean surface area to get OHC per unit area. The global mean OHC is also provided as a separate variable."
-    ohc_ds.attrs["global_area_m2"] = global_area.values
+    if not np.isnan(ds['TAREA']).any():
+        ohc_ds.attrs["global_area_m2"] = global_area.values
     ohc_ds.attrs["ocean_area_m2"] = ocean_area.values
 
     if "time" not in ohc_ds.dims:
+        return ohc_ds.compute()
+    if "time" in ohc_ds.dims and ohc_ds.sizes["time"] <= 24:
         return ohc_ds.compute()
 
     time_chunk = 24
@@ -237,6 +245,13 @@ if __name__ == "__main__":
                 "CMIP6-MCB-???PCT/ocn/month_1/",
                 "MCB-050PCT-ensm*/ocn/month_1/",
                 "Baseline/ocn/month_1/",
+            ]
+        },
+        "ARISE-1.0": {
+            "data_dir": "/glade/work/jonahshaw/PRISM_data/ARISE-1.0",
+            "file_patterns": [
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??/ocn/proc/tseries/month_1/",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??/ocn/proc/tseries/month_1/",
             ]
         },
         # Add more cases as needed
