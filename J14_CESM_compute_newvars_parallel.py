@@ -59,7 +59,7 @@ def crawl_and_process2(input_dir, output_dir, process_fn, **fn_args):
         # Supply the output directory to the function arguments so it can exit early if the output file already exists.
         if output_dir is not None:
             out_root = output_dir if rel_root == "." else os.path.join(output_dir, rel_root)
-        fn_args["out_root"] = out_root
+            fn_args["out_root"] = out_root
         for name in files:
             # Only look for monthly files
             if "h0" not in name:
@@ -69,9 +69,12 @@ def crawl_and_process2(input_dir, output_dir, process_fn, **fn_args):
             # Fail gracefully
             if data is None:
                 continue
+            if output_dir is None:
+                logging.info(f"Output directory not specified, skipping save for {filename}")
+                continue
             dst = os.path.join(out_root, filename)
             if os.path.exists(dst):
-                logging.info(f"{dst} already exists")
+                logging.info(f"{dst} already exists") # Should be duplicative now but keeping.
                 continue
             os.makedirs(out_root, exist_ok=True)
             logging.info(f"Writing {dst}")

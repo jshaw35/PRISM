@@ -1,3 +1,5 @@
+
+
 from pathlib import Path
 import os
 import xarray as xr
@@ -11,10 +13,17 @@ def average_spatially(
     datapath,
     average_vars = ["CLDTOT", "FLNS", "FLNSC", "FLNT", "FLNTC", "FLNR", "FLUT", "FLUTC", "FSNR", "FSNT", "FSNS", "FSNSC", "FSNTOA", "FSNTC", "FLNTCLR", "FSNTOAC", "LHFLX", "SHFLX", "TS", "PRECT", "PRECC", "PRECL", "FNNT", "PRECIP_THERMO"],
     var_detect_str: str = "h0",
+    out_root: str = None,
 ):
     # Parse the variable name from the test path, assuming it is in the format of "case/atm/proc/tseries/month_1/case.cam.h0.VAR.nc"
     filename = os.path.splitext(os.path.basename(datapath))[0]
     filename = filename + ".nc"
+    if out_root is not None:
+        save_filepath = os.path.join(out_root, filename)
+        if os.path.exists(save_filepath):
+            logging.info(f"{save_filepath} already exists")
+            return None, None
+
     name_parts = filename.split(".")
     # Skip if not a h0 file
     try:
@@ -52,6 +61,10 @@ def average_spatially(
 def crawl_and_process2(input_dir, output_dir, process_fn, **fn_args):
     for root, _, files in os.walk(input_dir):
         rel_root = os.path.relpath(root, input_dir)
+        # Supply the output directory to the function arguments so it can exit early if the output file already exists.
+        if output_dir is not None:
+            out_root = output_dir if rel_root == "." else os.path.join(output_dir, rel_root)
+            fn_args["out_root"] = out_root
         for name in files:
             # Only look for monthly files
             if "h0" not in name:
@@ -61,15 +74,16 @@ def crawl_and_process2(input_dir, output_dir, process_fn, **fn_args):
             # Fail gracefully
             if data is None:
                 continue
-            if output_dir is not None:
-                out_root = output_dir if rel_root == "." else os.path.join(output_dir, rel_root)
-                dst = os.path.join(out_root, filename)
-                if os.path.exists(dst):
-                    logging.info(f"{dst} already exists")
-                    continue
-                os.makedirs(out_root, exist_ok=True)
-                logging.info(f"Writing {dst}")
-                data.to_netcdf(dst)
+            if output_dir is None:
+                logging.info(f"Output directory not specified, skipping save for {filename}")
+                continue
+            dst = os.path.join(out_root, filename)
+            if os.path.exists(dst):
+                logging.info(f"{dst} already exists")
+                continue
+            os.makedirs(out_root, exist_ok=True)
+            logging.info(f"Writing {dst}")
+            data.to_netcdf(dst)
 
 
 # %%
@@ -77,6 +91,8 @@ if __name__ == "__main__":
     machine = "glade"
     if machine == "glade":
         savepath_root = "/glade/work/jonahshaw/PRISM_data/spatial_averages_data/"
+        # Path to variables used only here
+        derivedpath_root = "/glade/work/jonahshaw/PRISM_data/derived_vars/"
 
     case_dict = {
         "ARISE-1.0": ["/glade/work/jonahshaw/PRISM_data/ARISE-1.0/"],
@@ -92,18 +108,25 @@ if __name__ == "__main__":
         load_paths = case_dict.get(case, [])
         if len(load_paths) == 1:
             load_path_list = [load_paths[0]]
+            load_path_derived_list = [derivedpath_root + case + "/"]
             save_path_list = [case]
         elif len(load_paths) == 2:
             load_path_list = [load_paths[0] + subcase for subcase in load_paths[1]]
+            load_path_derived_list = [derivedpath_root + case + '/' + subcase for subcase in load_paths[1]]
             save_path_list = [case + "/" + subcase for subcase in load_paths[1]]
 
-        for load_path, save_path in zip(load_path_list, save_path_list):
+        for load_path, load_path_derived, save_path in zip(load_path_list, load_path_derived_list, save_path_list):
             logging.info(f"Processing case: {load_path}")
             crawl_and_process2(
                 input_dir=load_path,
                 output_dir=f"{savepath_root}/{save_path}",
                 process_fn=average_spatially,
             )
-
+            # Now process the derived variables, which are stored in a different directory.
+            crawl_and_process2(
+                input_dir=load_path_derived,
+                output_dir=f"{savepath_root}/{save_path}",
+                process_fn=average_spatially,
+            )
 
 # %%
