@@ -1,0 +1,15 @@
+#!/bin/bash -l
+#PBS -N ieei_picontrol
+#PBS -A REPLACE_WITH_YOUR_PBS_PROJECT_ACCOUNT
+#PBS -l select=1:ncpus=2:mem=32GB
+#PBS -l walltime=00:30:00
+#PBS -q casper
+#PBS -j oe
+
+# Fill in GLADE_USERNAME/PBS_PROJECT_ACCOUNT in ../config.py, and update the
+# PBS account code above, before running.
+# Activate the conda environment built from ../environment.yml, e.g.:
+#   conda activate /glade/work/$USER/conda-envs/ohc_ieei_rebuild
+
+cd "$(dirname "$0")/.."
+python run_ieei_piControl.py

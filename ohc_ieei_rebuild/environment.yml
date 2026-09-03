@@ -1,0 +1,12 @@
+name: ohc_ieei_rebuild
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - xarray
+  - numpy
+  - pandas
+  - netcdf4
+  - cftime
+  - dask
+  - matplotlib
