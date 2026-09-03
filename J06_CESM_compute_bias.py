@@ -21,49 +21,12 @@ import numpy as np
 import os
 import logging
 from pathlib import Path
+import glob
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
 # %%
 varlist = ['CLDTOT', 'FLNR', 'FLNS', 'FLNSC', 'FLNT', 'FLNTC', 'FLNTCLR', 'FLUT', 'FSNR', 'FSNS', 'FSNSC', 'FSNT', 'FSNTC', 'FSNTOA', 'FSNTOAC', 'LHFLX', 'SHFLX', 'TS', "PRECT", "PRECC", "PRECL", "PRECIP_THERMO"]
-
-
-def compute_thermoprecip(
-    ds,
-):
-    """Compute the thermodynamically-driven precipitation per O'Gorman 2012.
-    L del P = del R_TOA - del R_SFC - del SHFLX
-    P = (R_TOA - R_SFC - SHFLX) / L
-
-    Where the convention is that positive value are upwards.
-
-    Args:
-        ds (_type_): _description_
-    """
-    L = 2.5e6  # J/kg, latent heat of vaporization or 2.257e3 J/kg or 2.45e6 J/kg
-    # 2.5e6 per this lecture slide: https://ethz.ch/content/dam/ethz/special-interest/usys/iac/iac-dam/documents/edu/courses/climatological_and_hydrological_field_work/radiation_2025.pdf
-    vars = ["FLNT", "FSNT", "FLNS", "FSNS", "SHFLX"]
-    assert set(vars).issubset(set(ds.data_vars)), "Not all variables in varlist are in the dataset."
-
-    R_LW = ds["FLNT"] - ds["FLNS"] # Positive upwards convention for LW
-    R_SW = -1 * (ds["FSNT"] - ds["FSNS"]) # The convention is positive downwards for SW, so invert
-    R_ATM = R_LW + R_SW # Net radiation emitted/lost by the atmosphere
-    SHFLX = ds["SHFLX"]
-    # Compute in units of kg m^-2 s^-1
-    P = (R_ATM - SHFLX) / L
-
-    # R_TOA = ds["FLNT"] - ds["FSNT"] # Positive upwards convention for LW
-    # R_SFC = (ds["FLNS"] - ds["FSNS"]) # The convention is positive downwards for SW, so invert
-    # SHFLX = ds["SHFLX"]
-    # # Compute in units of kg m^-2 s^-1
-    # P = (R_TOA - R_SFC - SHFLX) / L
-
-    # Convert to mm/day: 1000 mm / m, 86400 s / day, 1000 kg / m^3 for water density (last two cancel out)
-    P = P * 86400
-    P.attrs["long_name"] = "Thermodynamically-driven precipitation"
-    P.attrs["units"] = "mm/day"
-    P.name = "PRECIP_THERMO"
-    return P
 
 
 def compute_error_decomposition(
@@ -73,6 +36,7 @@ def compute_error_decomposition(
     time_fcn: callable = lambda da: da.groupby("time.year").mean("time"),
     spatial_dims: list[str] = None,
     weights: xr.DataArray = None,
+    file_pattern: str = None,
 ):
     """Compute the error decomposition per Medeiros (2023) and Simpson et al. (2020) weighting by np.cos(np.deg2rad(ds["lat"])).
 
@@ -91,13 +55,18 @@ def compute_error_decomposition(
     # Parse the variable name from the test path, assuming it is in the format of "case/atm/proc/tseries/month_1/case.cam.h0.VAR.nc"
     filename = os.path.splitext(os.path.basename(test_path))[0]
     name_parts = filename.split(".")
+    # Filter files that don't match the expected pattern
+    if file_pattern is not None and not glob.fnmatch.fnmatch(test_path, f"*/{file_pattern}"):
+        return None
+    # Filter files without the detection string
+    if var_detect_str not in name_parts:
+        return None
     marker_idx = name_parts.index(var_detect_str)
     test_var = name_parts[marker_idx + 1]
-    if test_var not in control_ds.data_vars:
-        logging.error(f"Variable {test_var} not found in control dataset.")
-        logging.info(f"control_ds.data_vars: {control_ds.data_vars}")
+    if test_var not in control_ds.data_vars: # Don't open datasets without a relevant variable
         return None
 
+    logging.info(f"Got {test_var} from {test_path}")
     test_da = xr.open_dataset(test_path)[test_var]
     # Handle the CESM time coordinate issue and challenges with cftime.DatetimeNoLeap
     if test_da["time"][0]["time.month"] == 2:
@@ -156,19 +125,20 @@ def crawl_and_process2(input_dir, output_dir, process_fn, **fn_args):
     for root, _, files in os.walk(input_dir):
         rel_root = os.path.relpath(root, input_dir)
         out_root = output_dir if rel_root == "." else os.path.join(output_dir, rel_root)
-        os.makedirs(out_root, exist_ok=True)
         for name in files:
             src = os.path.join(root, name)
             dst = os.path.join(out_root, name)
             if os.path.exists(dst):
                 logging.info(f"{dst} already exists")
                 continue
-            logging.info(f"Processing {src}")
+            # logging.info(f"Processing {src}")
             data = process_fn(src, **fn_args)
             if data is None:
-                logging.error(f"Failed to process {src}")
+                # logging.error(f"Failed to process {src}")
                 continue
             logging.info(f"Writing {dst}")
+            # Create the encompassing directory if it doesn't exist
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
             data.to_netcdf(dst)
 
 
@@ -204,91 +174,84 @@ def shift_noleap_time_back_one_month(time_values):
 
 # %%
 if __name__ == "__main__":
-    # CURC paths
-    control_loadpath = Path("/home/josh2250/projects/PRISM/data/control_baselines/")
-    rawdata_loadpath = Path("/home/josh2250/kaydata/jshaw/RadInt_rawdata/")
-    save_path = Path("/home/josh2250/projects/PRISM/data/error_relativetobaseline/")
+
+    # Glade paths
+    control_loadpath_atm = Path("/glade/work/jonahshaw/PRISM_data/control_baselines_atm/")
+    save_path_atm = Path("/glade/work/jonahshaw/PRISM_data/error_relativetobaseline_atm/")
+
+    # Path to variables that have been derived from CESM.
+    derivedpath_atm_root = "/glade/work/jonahshaw/PRISM_data/derived_vars/"
+    derivedpath_ohc_root = "/glade/work/jonahshaw/PRISM_data/spatial_OHC_data/"
+    derivedpath_ohf_root = "/glade/work/jonahshaw/PRISM_data/spatial_oceanflux_data/"
 
     # Keys are the controls and the values are lists of cases to compare to that control.
     compare_cases = {
-        "CESM2_LME_control": ["CESM2_LME"],
-        "CESM2_1850control": ["CESM2_1850control", "CESM2_LE", "CESM2_SF", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
-        "CESM2_LE_2000_2009_cmip6": ["CESM2_1850control", "CESM2_LE", "CESM2_SF", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
-        "CESM2_LE_2000_2009_smbb": ["CESM2_1850control", "CESM2_LE", "CESM2_SF", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
-        "CESM2_WACCM_1850control": ["CESM2_WACCM_1850control", "CESM2_WACCM_HIST", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
-        "CESM2_WACCM_HIST_2000_2014": ["CESM2_WACCM_1850control", "CESM2_WACCM_HIST", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
-        "CESM2_WACCM_HIST_1850_1864": ["CESM2_WACCM_1850control", "CESM2_WACCM_HIST", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
+        "CESM2_WACCM_1850control_0050_0075": ["CESM2_WACCM_1850control", "CESM2_WACCM_HIST", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB", "ARISE-1.0"],
+        "CESM2_WACCM_1850control_0100_0499": ["CESM2_WACCM_1850control", "CESM2_WACCM_HIST", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB", "ARISE-1.0"],
+        "CESM2_WACCM_HIST_1850_1864": ["CESM2_WACCM_1850control", "CESM2_WACCM_HIST", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB", "ARISE-1.0"],
+        "CESM2_WACCM_HIST_2000_2014": ["CESM2_WACCM_1850control", "CESM2_WACCM_HIST", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB", "ARISE-1.0"],
+        "CESM2_WACCM_HIST_2015_2034": ["CESM2_WACCM_1850control", "CESM2_WACCM_HIST", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB", "ARISE-1.0"],
     }
 
-    compare_paths = {
-        "CESM2_LME": f"{str(rawdata_loadpath)}/CESM2_LME/",
-        "CESM2_1850control": f"{str(rawdata_loadpath)}/CESM2_1850control/",
-        "CESM2_LE": f"{str(rawdata_loadpath)}/CESM2_LE/",
-        "CESM2_SF": f"{str(rawdata_loadpath)}/CESM2_SF/",
-        "ARISE_SAI": f"{str(rawdata_loadpath)}/ARISE_SAI/",
-        "CESM2_WACCM_SSP2-4.5": f"{str(rawdata_loadpath)}/CESM2_WACCM_SSP2-4.5/",
-        "CESM2_WACCM_SSP2-4.5_MCB": f"{str(rawdata_loadpath)}/CESM2_WACCM_SSP2-4.5_MCB/",
-        "CESM2_WACCM_1850control": f"{str(rawdata_loadpath)}/CESM2_WACCM_1850control/",
-        "CESM2_WACCM_HIST": f"{str(rawdata_loadpath)}/CESM2_WACCM_HIST/",
+    # Configure settings for each case to be loaded
+    case_dict = {
+        "CESM2_WACCM_1850control": {
+            "sources": ["/glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/", f"{derivedpath_atm_root}/CESM2_WACCM_1850control/"],
+            "subsources": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"],
+            "file_pattern": "atm/proc/tseries/month_1/b.e21.BW1850.f09_g17.CMIP6-piControl.001.cam.h0.*.nc",
+        },
+        "CESM2_WACCM_HIST": {
+            "sources": ["/glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/", f"{derivedpath_atm_root}/CESM2_WACCM_HIST/"],
+            "subsources": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001", "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.002", "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.003"],
+            "file_pattern": "atm/proc/tseries/month_1/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?.cam.h0.*.nc",
+        },
+        "ARISE_SAI": {
+            "sources": ["/gdex/data/d651059/ARISE-SAI-1.5/", f"{derivedpath_atm_root}/ARISE_SAI/"],
+            "file_pattern": "*/atm/proc/tseries/month_1/b.e21.BW.f09_g17.SSP245*.cam.h0.*.nc",
+        },
+        "ARISE-1.0": {
+            "sources": ["/glade/work/jonahshaw/PRISM_data/ARISE-1.0/", f"{derivedpath_atm_root}/ARISE_SAI/"],
+            "file_pattern": "*/atm/proc/tseries/month_1/b.e21.BW.f09_g17.SSP245*.cam.h0.*.nc",
+        },
+        "CESM2_WACCM_SSP2-4.5": {
+            "sources": ["/gdex/data/d651045/CESM2-WACCM-SSP245/", f"{derivedpath_atm_root}/CESM2_WACCM_SSP2-4.5/"],
+            "file_pattern": "*/atm/proc/tseries/month_1/b.e21.BWSSP245cmip6.f09_g17.*.nc", 
+        },
+        "CESM2_WACCM_SSP2-4.5_MCB": {
+            "sources": ["/gdex/data/d314006/", f"{derivedpath_atm_root}/CESM2_WACCM_SSP2-4.5_MCB/"],
+            "file_pattern": "*/atm/month_1/b.e21.*.nc",
+        },
     }
 
     for control_case in compare_cases:
         logging.info(f"Processing case: {control_case}")
-        control_path = str(control_loadpath) + "/" + control_case + ".nc"
-        control_ds = xr.open_dataset(control_path)
+        control_paths = glob.glob(f"{str(control_loadpath_atm)}/{control_case}/{control_case}*.nc")
+        control_ds = xr.open_mfdataset(control_paths)
         for compare_case in compare_cases[control_case]:
             logging.info(f"Comparing to case: {compare_case}")
-            input_dir = compare_paths[compare_case]
-            
-            crawl_and_process2(
-                input_dir,
-                save_path / control_case / compare_case,
-                compute_error_decomposition,
-                control_ds=control_ds,
-                time_fcn=lambda da: da.groupby("time.year").mean("time"), # Annual averages
-            )
-    # %%
-    # Compute bias for OHC
-    # CURC paths
-    control_loadpath_ohc = Path("/home/josh2250/projects/PRISM/data/control_baselines_ohc/")
-    ohcdata_loadpath = Path("/home/josh2250/kaydata/jshaw/RadInt_ohcdata/")
-    save_path_ohc = Path("/home/josh2250/projects/PRISM/data/error_relativetobaseline/")
-
-    # Keys are the controls and the values are lists of cases to compare to that control.
-    compare_cases_ohc = {
-        "CESM2_WACCM_1850control": ["CESM2_WACCM_1850control", "CESM2_WACCM_HIST", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
-        "CESM2_WACCM_HIST_2000_2014": ["CESM2_WACCM_1850control", "CESM2_WACCM_HIST", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
-        "CESM2_WACCM_HIST_1850_1864": ["CESM2_WACCM_1850control", "CESM2_WACCM_HIST", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5", "CESM2_WACCM_SSP2-4.5_MCB"],
-    }
-
-    compare_paths_ohc = {
-        "ARISE_SAI": f"{str(ohcdata_loadpath)}/ARISE_SAI/",
-        "CESM2_WACCM_SSP2-4.5": f"{str(ohcdata_loadpath)}/CESM2_WACCM_SSP2-4.5/",
-        "CESM2_WACCM_SSP2-4.5_MCB": f"{str(ohcdata_loadpath)}/CESM2_WACCM_SSP2-4.5_MCB/",
-        "CESM2_WACCM_1850control": f"{str(ohcdata_loadpath)}/CESM2_WACCM_1850control/",
-        "CESM2_WACCM_HIST": f"{str(ohcdata_loadpath)}/CESM2_WACCM_HIST/",
-    }
-    ohc_ancillary_ds = xr.open_dataset(ohcdata_loadpath / "ancillary_files/ohc_ancillary_data.nc")
-    pop_weights = ohc_ancillary_ds["TAREA"]
-
-    for control_case in compare_cases_ohc:
-        logging.info(f"Processing case: {control_case}")
-        control_path = str(control_loadpath_ohc) + "/" + control_case + ".nc"
-        control_ds = xr.open_dataset(control_path)
-        for compare_case in compare_cases_ohc[control_case]:
-            logging.info(f"Comparing to case: {compare_case}")
-            input_dir = compare_paths_ohc[compare_case]
-            
-            crawl_and_process2(
-                input_dir,
-                save_path_ohc / control_case / compare_case,
-                compute_error_decomposition,
-                control_ds=control_ds,
-                time_fcn=lambda da: da.groupby("time.year").mean("time"), # Annual averages
-                var_detect_str="h",
-                spatial_dims=["nlat", "nlon"],
-                weights=pop_weights,
-            )
+            for source in case_dict[compare_case]["sources"]:
+                if "subsources" in case_dict[compare_case].keys():
+                    for subs in case_dict[compare_case]["subsources"]:
+                        input_dir = os.path.join(source, subs)
+                        logging.info(f"Processing input_dir: {input_dir}")
+                        crawl_and_process2(
+                            input_dir,
+                            save_path_atm / control_case / compare_case / subs,
+                            compute_error_decomposition,
+                            control_ds=control_ds,
+                            time_fcn=lambda da: da.groupby("time.year").mean("time"), # Annual averages
+                            file_pattern=case_dict[compare_case]["file_pattern"],
+                        )
+                else:
+                    logging.info(f"Processing input_dir: {source}")
+                    crawl_and_process2(
+                        source,
+                        save_path_atm / control_case / compare_case,
+                        compute_error_decomposition,
+                        control_ds=control_ds,
+                        time_fcn=lambda da: da.groupby("time.year").mean("time"), # Annual averages
+                        file_pattern=case_dict[compare_case]["file_pattern"],
+                    )
 
     # %%
 # import matplotlib.pyplot as plt
