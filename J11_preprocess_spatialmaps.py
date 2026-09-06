@@ -12,11 +12,7 @@ from pathlib import Path
 import os
 import xarray as xr
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib as mpl
-import seaborn as sns
 import pandas as pd
-from matplotlib.ticker import MultipleLocator
 import dask
 
 import logging
@@ -55,7 +51,7 @@ def shift_noleap_time_back_one_month(time_values):
     )
 
 
-def get_weights_by_month(
+def get_weights_by_month2(
     time_ds,
     account_for_leap: bool = False,
 ):
@@ -80,26 +76,58 @@ def get_weights_by_month(
         }
     )
 
-    time_weights = []
-    if account_for_leap == False:
-        for _t in time_ds:
-            time_weights.append(weights.sel(month=_t['time.month']))
-    else:
-        for _t in time_ds:
-            if _t["time.year"] % 4 == 0:
-                time_weights.append(weights_leap.sel(month=_t['time.month']))
-            else:
-                time_weights.append(weights.sel(month=_t['time.month']))
+    month_values = time_ds.dt.month
+    year_values = time_ds.dt.year
 
-    # Duplicate the time dimension but with weights as values
-    weights_ds = xr.DataArray(
-        data=time_weights,
-        dims="time",
-        coords={
-            "time":time_ds,
-        },
+    # Vectorized selection of the appropriate weights for each time point
+    if account_for_leap:
+        weights = xr.where((year_values % 4 == 0), weights_leap.sel(month=month_values), weights.sel(month=month_values))
+    else:
+        weights = weights.sel(month=month_values)
+    return weights
+
+
+def compute_weighted_annual_mean(ds, account_for_leap=False):
+    """
+    Compute annual means weighted by days in each month.
+    
+    Parameters
+    ----------
+    ds : xr.Dataset or xr.DataArray
+        Dataset with monthly time coordinate
+    account_for_leap : bool, default False
+        Whether to account for leap years
+    
+    Returns
+    -------
+    xr.Dataset or xr.DataArray
+        Annual means with proper time weighting
+    """
+    return ds.groupby("time.year").map(
+        lambda x: x.weighted(get_weights_by_month2(x["time"], account_for_leap)).mean(dim="time")
     )
-    return weights_ds
+
+
+def compute_weighted_period_mean(ds, time_slice, account_for_leap=False):
+    """
+    Compute mean over a time period with proper monthly weighting.
+    
+    Parameters
+    ----------
+    ds : xr.Dataset or xr.DataArray
+        Dataset with monthly time coordinate
+    time_slice : slice
+        Time slice (e.g., slice("2060", "2069"))
+    account_for_leap : bool, default False
+        Whether to account for leap years
+    
+    Returns
+    -------
+    xr.Dataset or xr.DataArray
+        Weighted mean over the specified period
+    """
+    ds_subset = ds.sel(time=time_slice)
+    return ds_subset.weighted(get_weights_by_month2(ds_subset["time"], account_for_leap)).mean(dim="time")
 
 
 def crawl_and_list_glob(input_dir, file_string):
@@ -111,6 +139,24 @@ def compute_decadal2(
     ds,
     center=True,
 ):
+    """
+    Compute decadal means from annual data using a 10-year rolling window.
+    
+    Parameters
+    ----------
+    ds : xr.Dataset or xr.DataArray
+        Input data. Expected to have either 'time' (monthly) or 'year' (annual) coordinate.
+        If monthly data is provided via 'time', expects 120-month (10-year) windows.
+        If annual data is provided via 'year', applies 10-year rolling mean.
+        Note: Input data should already be properly weighted if temporal averaging was performed.
+    center : bool, default True
+        If True, center the rolling window (not currently used in the function body).
+    
+    Returns
+    -------
+    xr.Dataset or xr.DataArray
+        Decadal means with 'year' coordinate
+    """
     if "time" in ds.coords:
         ds_decadal = ds.rolling(time=120, min_periods=120, center=True).mean(dim="time").sel(time=ds["time"][::12])
         ds_decadal["time"] = ds_decadal["time.year"]
@@ -120,7 +166,13 @@ def compute_decadal2(
     return ds_decadal
 
 
-def compute_picontrol_uncertainty(pi_annual, variable_names=None, branch_period=(50, 75), decadal_selection=None):
+def compute_picontrol_uncertainty(
+    pi_annual,
+    variable_names=None,
+    branch_period=(50, 75),
+    decadal_selection=None,
+    detrend=True,
+):
     """
     Compute annual and decadal uncertainty statistics from piControl annual data.
     
@@ -167,19 +219,26 @@ def compute_picontrol_uncertainty(pi_annual, variable_names=None, branch_period=
             pi_decadal = pi_decadal.sel(year=decadal_selection)
     
     # Compute annual and decadal after detrending
-    pi_annual_detrended = detrend_ds(pi_annual, dim="year", deg=1)
-    pi_decadal_detrended = detrend_ds(pi_decadal, dim="year", deg=1)
+    if detrend:
+        pi_annual_detrended = detrend_ds(pi_annual, dim="year", deg=1)
+        pi_decadal_detrended = detrend_ds(pi_decadal, dim="year", deg=1)
+    else:
+        pi_annual_detrended = pi_annual
+        pi_decadal_detrended = pi_decadal
     
     # Compute annual uncertainty
-    pi_annual_std = pi_annual_detrended.std("year").assign_coords(quantile=-1).expand_dims("quantile")
+    quantile_vars = ["year"]
+    if "ens" in pi_annual_detrended.dims:
+        quantile_vars.append("ens")
+    pi_annual_std = pi_annual_detrended.std(dim=quantile_vars).assign_coords(quantile=-1).expand_dims("quantile")
     pi_annual_detrended = pi_annual_detrended.chunk({"year": -1})
-    pi_annual_quantiles = pi_annual_detrended.quantile([0.025, 0.975], dim="year")
+    pi_annual_quantiles = pi_annual_detrended.quantile([0.025, 0.975], dim=quantile_vars)
     pi_annual_unc = xr.concat([pi_annual_quantiles, pi_annual_std], dim="quantile")
     
     # Compute decadal uncertainty
-    pi_decadal_std = pi_decadal_detrended.std("year").assign_coords(quantile=-1).expand_dims("quantile")
+    pi_decadal_std = pi_decadal_detrended.std(dim=quantile_vars).assign_coords(quantile=-1).expand_dims("quantile")
     pi_decadal_detrended = pi_decadal_detrended.chunk({"year": -1})
-    pi_decadal_quantiles = pi_decadal_detrended.quantile([0.025, 0.975], dim="year")
+    pi_decadal_quantiles = pi_decadal_detrended.quantile([0.025, 0.975], dim=quantile_vars)
     pi_decadal_unc = xr.concat([pi_decadal_quantiles, pi_decadal_std], dim="quantile")
     
     # Concatenate annual and decadal along period dimension
@@ -260,7 +319,7 @@ def match_wildcard_case(pattern, case_list):
     return matches
 
 
-def load_data_with_configs(CASE_CONFIGS, varlist, year_dim="time"):
+def load_data_with_configs(CASE_CONFIGS, varlist, year_dim="time", **kwargs):
     """
     Load ensemble case data according to CASE_CONFIGS dictionary.
     
@@ -303,7 +362,7 @@ def load_data_with_configs(CASE_CONFIGS, varlist, year_dim="time"):
             logging.info(f"Loading data for subcase: {case_str}")
 
             # Load case data, supporting wildcards for ensemble members
-            all_ds = load_ensemble_cases(datapath, case_str, varlist)
+            all_ds = load_ensemble_cases(datapath, case_str, varlist, **kwargs)
             if all_ds is None:
                 logging.warning(f"No files found for case {case_label} with case string {case_str} in path {datapath}")
                 continue
@@ -421,18 +480,23 @@ def load_data_with_configs(CASE_CONFIGS, varlist, year_dim="time"):
                         elif "ens" not in all_ds.indexes and "ens" in append_ds_subset.indexes:
                             # append_ds_subset has indexed ens, all_ds doesn't - reset append_ds_subset ens index
                             append_ds_subset = append_ds_subset.reset_index("ens", drop=False)
-                        
+
                         all_ds = xr.concat([append_ds_subset, all_ds], dim=year_dim)
 
             if CASE_CONFIGS[case_label]["ufunc"] is not None:
                 all_ds = CASE_CONFIGS[case_label]["ufunc"](all_ds)
             case_dict[case_str] = all_ds
         data_dict[case_label] = case_dict
-    
+
     return data_dict
 
 
-def load_ensemble_cases(datapath_subdir, case_str, varlist):
+def load_ensemble_cases(
+    datapath_subdir,
+    case_str,
+    varlist,
+    identifier: str=None,
+):
     """
     Load case data with support for wildcard patterns matching multiple ensemble members.
     
@@ -462,14 +526,24 @@ def load_ensemble_cases(datapath_subdir, case_str, varlist):
         # Original behavior: no wildcards, use standard file finding
         all_files = []
         for var in varlist:
-            var_files = crawl_and_list_glob(datapath_subdir, f"**/*{case_str}*.{var}.*nc")
+            if identifier is not None:
+                var_files = crawl_and_list_glob(datapath_subdir, f"**/*{case_str}*{identifier}.{var}.*nc")
+            else:
+                var_files = crawl_and_list_glob(datapath_subdir, f"**/*{case_str}*.{var}.*nc")
             all_files.extend(var_files)
         all_files.sort()
 
         if len(all_files) == 0:
             return None
-        
-        all_ds = xr.open_mfdataset(all_files)
+        try:
+            all_ds = xr.open_mfdataset(
+                all_files,
+                preprocess=lambda ds: ds[varlist],
+                combine="nested",
+                concat_dim="time",
+            )
+        except:
+            all_ds = xr.open_mfdataset(all_files)
         return all_ds
     
     else:
@@ -477,7 +551,10 @@ def load_ensemble_cases(datapath_subdir, case_str, varlist):
         all_files = []
         for var in varlist:
             # Use case_str directly in glob pattern (it contains wildcards)
-            var_files = crawl_and_list_glob(datapath_subdir, f"**/*{case_str}*.{var}.*nc")
+            if identifier is not None:
+                var_files = crawl_and_list_glob(datapath_subdir, f"**/*{case_str}*{identifier}.{var}.*nc")
+            else:
+                var_files = crawl_and_list_glob(datapath_subdir, f"**/*{case_str}*.{var}.*nc")
             all_files.extend(var_files)
         
         if len(all_files) == 0:
@@ -505,17 +582,22 @@ def load_ensemble_cases(datapath_subdir, case_str, varlist):
                 ens_ds = xr.open_mfdataset(
                     ens_files,
                     combine='by_coords',
-                    compat='no_conflicts'
+                    compat='no_conflicts',
+                    preprocess=lambda ds: ds[varlist],
                 )
                 
                 # Add ensemble number as a data variable first, then expand the dimension
                 ens_ds = ens_ds.expand_dims({'ens': [ens_number]})
+                # Handle time duplicates in ARISE-1.0 data
+                if ens_ds.indexes['time'].has_duplicates:
+                    ens_ds = ens_ds.drop_duplicates(dim='time')
                 ensemble_datasets.append(ens_ds)
                 
                 logging.info(f"Loaded ensemble {ens_number} with {len(ens_files)} files")
             
             except Exception as e:
                 logging.error(f"Error loading ensemble {ens_number}: {e}")
+                logging.info(f"Files were: {ens_files}")
                 continue
         
         if len(ensemble_datasets) == 0:
@@ -523,7 +605,12 @@ def load_ensemble_cases(datapath_subdir, case_str, varlist):
             return None
         
         # Concatenate all ensembles along the 'ens' dimension
-        combined_ds = xr.concat(ensemble_datasets, dim='ens')
+        try:
+            combined_ds = xr.concat(ensemble_datasets, dim='ens')
+        except Exception as e:
+            logging.error(f"Error concatenating ensemble datasets: {e}")
+            logging.info(f"List of ensemble datasets: {ensemble_datasets}")
+            # return ensemble_datasets
 
         return combined_ds
 
@@ -553,14 +640,24 @@ def detrend_ds(ds, dim, deg=1):
 # %%
 
 if __name__ == "__main__":
-    machine = "curc" # "glade", "curc"
-    if machine == "glade":
-        spatial_root_dir = "/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/"
-    elif machine == "curc":
-        spatial_root_dir = "/pl/active/kaygroup/jshaw/RadInt_rawdata/"
-    CASE_CONFIGS1 = {
+    # Where processed OHC data is stored
+    ohc_data_root = "/glade/work/jonahshaw/PRISM_data/spatial_OHC_data/"
+
+    # Where the output data will be stored
+    output_data_root = "/glade/work/jonahshaw/PRISM_data/"
+    ohc_spatial_save_root = f"{output_data_root}/spatial_maps_ohc/"
+    atm_spatial_save_root = f"{output_data_root}/spatial_maps_atm/"
+
+    # What atmospheric variables to process
+    atm_varlist = ['CLDTOT', 'FLNR', 'FLNS', 'FLNSC', 'FLNT', 'FLNTC', 'FLNTCLR', 'FLUT', 'FSNR', 'FSNS', 'FSNSC', 'FSNT', 'FSNTC', 'FSNTOA', 'FNNT', 'FSNTOAC', 'LHFLX', 'SHFLX', 'TS', "PRECT", "PRECC", "PRECL"]
+    atm_derived_varlist = ['FNNT', 'PRECIP_THERMO']
+
+    # Set config dictionaries.
+    # This tells the script which cases to load and how to process them.
+    # Configuration for CAM variables from the control cases (1850 control and 2015-2034 period)
+    CASE_CONFIGS_CONTROL_ATM = {
         "CESM2_WACCM_1850control" :{
-            "path": spatial_root_dir + "CESM2_WACCM_1850control/",
+            "path": "/glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/",
             "subdir_cases": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"],
             "append_cases": {
                 "b.e21.BW1850.f09_g17.CMIP6-piControl.001": None,
@@ -568,31 +665,55 @@ if __name__ == "__main__":
             "ufunc": None,
         },
         "CESM2_WACCM_SSP2-4.5": {
-            "path": spatial_root_dir + "CESM2_WACCM_SSP2-4.5/",
-            "subdir_cases": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??"],
-            "append_cases": {
-                "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??": None,
-            },
-            "ufunc": lambda ds: ds.sel(time=slice("2060", "2069")).mean(dim="time"),
+             "path": "/gdex/data/d651045/CESM2-WACCM-SSP245/",
+             "subdir_cases": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??"],
+             "append_cases": {
+                 "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??": None,
+             },
+             "ufunc": None,
+        },
+    }
+
+    # Configuration for CAM variables from the test cases (everything using SSP2-4.5)
+    CASE_CONFIGS1 = {
+        "CESM2_WACCM_SSP2-4.5": {
+             "path": "/gdex/data/d651045/CESM2-WACCM-SSP245/",
+             "subdir_cases": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??"],
+             "append_cases": {
+                 "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??": None,
+             },
+             "ufunc": lambda ds: compute_weighted_period_mean(ds, slice("2060", "2069"), account_for_leap=False),
         },
         "ARISE-SAI": {
-            "path": spatial_root_dir + "ARISE_SAI/",
+            "path": "/gdex/data/d651059/ARISE-SAI-1.5/",
             "subdir_cases": [
-                "1p5K-SAI.00?",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?",
+                "1p5K-SAI.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??",
             ],
             "append_cases": {
-                "1p5K-SAI.00?": None,
-                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?": None,
-                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?": None,
+                "1p5K-SAI.0??": None,
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??": None,
+                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??": None,
             },
-            "ufunc": lambda ds: ds.sel(time=slice("2060", "2069")).mean(dim="time"),
+            "ufunc": lambda ds: compute_weighted_period_mean(ds, slice("2060", "2069"), account_for_leap=False),
+        },
+        "ARISE-1.0": {
+            "path": "/glade/work/jonahshaw/PRISM_data/ARISE-1.0/",
+            "subdir_cases": [
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??",
+            ],
+            "append_cases": {
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??": None,
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??": None,
+            },
+            "ufunc": lambda ds: compute_weighted_period_mean(ds, slice("2060", "2069"), account_for_leap=False),
         },
         "CESM2_WACCM_SSP2-4.5_MCB": {
-            "path": spatial_root_dir + "CESM2_WACCM_SSP2-4.5_MCB/",
+            "path": "/gdex/data/d314006/",
             "subdir_cases": [
-                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?",
+                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??",
                 "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000",
                 "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000",
                 "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000",
@@ -600,24 +721,20 @@ if __name__ == "__main__":
                 "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000",
             ],
             "append_cases": {
-                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?": None,
+                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??": None,
                 "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": None,
                 "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": None,
                 "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": None,
                 "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000": None,
                 "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000": None,
             },
-            "ufunc": lambda ds: ds.sel(time=slice("2060", "2069")).mean(dim="time"),
+            "ufunc": lambda ds: compute_weighted_period_mean(ds, slice("2060", "2069"), account_for_leap=False),
         },
     }
 
     # Configs for loading OHC data
-    if machine == "glade":
-        ohc_data_root = "/glade/work/jonahshaw/PRISM_data/spatial_OHC_data/"
-    elif machine == "curc":
-        ohc_data_root = "/pl/active/kaygroup/jshaw/RadInt_ohcdata/"
-    
-    CASE_CONFIGS2 = {
+    # Control cases
+    CASE_CONFIGS_CONTROL_OCN = {
         "CESM2_WACCM_1850control" :{
             "path": ohc_data_root + "CESM2_WACCM_1850control/",
             "subdir_cases": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"],
@@ -632,26 +749,49 @@ if __name__ == "__main__":
             "append_cases": {
                 "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??": None,
             },
-            "ufunc": lambda ds: ds.sel(time=slice("2060", "2069")).mean(dim="time"),
+            "ufunc": lambda ds: ds.sel(time=slice("2015", "2034")),
+        },
+    }
+    # Test cases
+    CASE_CONFIGS2 = {
+        "CESM2_WACCM_SSP2-4.5": {
+            "path": ohc_data_root + "CESM2_WACCM_SSP2-4.5/",
+            "subdir_cases": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??"],
+            "append_cases": {
+                "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??": None,
+            },
+            "ufunc": lambda ds: compute_weighted_period_mean(ds, slice("2060", "2069"), account_for_leap=False),
         },
         "ARISE-SAI": {
             "path": ohc_data_root + "ARISE_SAI/",
             "subdir_cases": [
-                "1p5K-SAI.00?",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?",
+                "1p5K-SAI.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??",
             ],
             "append_cases": {
-                "1p5K-SAI.00?": None,
-                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?": None,
-                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?": None,
+                "1p5K-SAI.0??": None,
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??": None,
+                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??": None,
             },
-            "ufunc": lambda ds: ds.sel(time=slice("2060", "2069")).mean(dim="time"),
+            "ufunc": lambda ds: compute_weighted_period_mean(ds, slice("2060", "2069"), account_for_leap=False),
+        },
+        "ARISE-1.0": {
+            "path": ohc_data_root + "ARISE-1.0/",
+            "subdir_cases": [
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??",
+            ],
+            "append_cases": {
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??": None,
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??": None,
+            },
+            "ufunc": lambda ds: compute_weighted_period_mean(ds, slice("2060", "2069"), account_for_leap=False),
         },
         "CESM2_WACCM_SSP2-4.5_MCB": {
             "path": ohc_data_root + "CESM2_WACCM_SSP2-4.5_MCB/",
             "subdir_cases": [
-                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?",
+                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??",
                 "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000",
                 "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000",
                 "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000",
@@ -659,63 +799,177 @@ if __name__ == "__main__":
                 "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000"
             ],
             "append_cases": {
-                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?": None,
+                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??": None,
                 "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": None,
                 "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": None,
                 "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": None,
                 "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000": None,
                 "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000": None,
             },
-            "ufunc": lambda ds: ds.sel(time=slice("2060", "2069")).mean(dim="time"),
+            "ufunc": lambda ds: compute_weighted_period_mean(ds, slice("2060", "2069"), account_for_leap=False),
+        },
+    }
+    # Load configs must be repeated for the derived variables compute from CAM.
+    CASE_CONFIGS_CONTROL_ATM_DERIVED = {
+        "CESM2_WACCM_1850control" :{
+            "path": "/glade/work/jonahshaw/PRISM_data/derived_vars/CESM2_WACCM_1850control/",
+            "subdir_cases": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"],
+            "append_cases": {
+                "b.e21.BW1850.f09_g17.CMIP6-piControl.001": None,
+            },
+            "ufunc": None,
+        },
+        "CESM2_WACCM_SSP2-4.5": {
+            "path": "/glade/work/jonahshaw/PRISM_data/derived_vars/CESM2_WACCM_SSP2-4.5/",
+            "subdir_cases": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??"],
+            "append_cases": {
+                "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??": None,
+            },
+            "ufunc": None,
+        },
+    }
+
+    # Configuration for CAM variables from the test cases (everything using SSP2-4.5)
+    CASE_CONFIGS1_DERIVED = {
+        "CESM2_WACCM_SSP2-4.5": {
+            "path": "/glade/work/jonahshaw/PRISM_data/derived_vars/CESM2_WACCM_SSP2-4.5/",
+            "subdir_cases": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??"],
+            "append_cases": {
+                "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??": None,
+            },
+            "ufunc": lambda ds: compute_weighted_period_mean(ds, slice("2060", "2069"), account_for_leap=False),
+        },
+        "ARISE-SAI": {
+            "path": "/glade/work/jonahshaw/PRISM_data/derived_vars/ARISE_SAI/",
+            "subdir_cases": [
+                "1p5K-SAI.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??",
+            ],
+            "append_cases": {
+                "1p5K-SAI.0??": None,
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??": None,
+                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??": None,
+            },
+            "ufunc": lambda ds: compute_weighted_period_mean(ds, slice("2060", "2069"), account_for_leap=False),
+        },
+        "ARISE-1.0": {
+            "path": "/glade/work/jonahshaw/PRISM_data/derived_vars/ARISE-1.0/",
+            "subdir_cases": [
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??",
+            ],
+            "append_cases": {
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??": None,
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??": None,
+            },
+            "ufunc": lambda ds: compute_weighted_period_mean(ds, slice("2060", "2069"), account_for_leap=False),
+        },
+        "CESM2_WACCM_SSP2-4.5_MCB": {
+            "path": "/glade/work/jonahshaw/PRISM_data/derived_vars/CESM2_WACCM_SSP2-4.5_MCB/",
+            "subdir_cases": [
+                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000",
+            ],
+            "append_cases": {
+                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??": None,
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": None,
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": None,
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": None,
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000": None,
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000": None,
+            },
+            "ufunc": lambda ds: compute_weighted_period_mean(ds, slice("2060", "2069"), account_for_leap=False),
         },
     }
 
     # %%
-    # Load data using the generalized function
-    ohc_varlist = ["OHC"]
-    year_dim = "time"
-    ohc_dict = load_data_with_configs(CASE_CONFIGS2, ohc_varlist, year_dim=year_dim)
+    # This config dict tells the function how to compute uncertainty for each control case.
+    # e.g. From what period to sample, if detrending should be done, etc.
+    # Configure uncertainty settings for controls
+    CONFIG_CONTROL_UNCERTAINTY = {
+        "CESM2_WACCM_1850control": {
+            "case": "b.e21.BW1850.f09_g17.CMIP6-piControl.001",
+            "branch_period": (50, 75),
+            "decadal_selection": slice(5, None, 10),
+            "**args": {},
+        },
+        "CESM2_WACCM_SSP2-4.5": {
+            "case": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+            "branch_period": (None, None),
+            "decadal_selection": None,
+            "**args": {"detrend": False},
+        },
+    }
+    # Only different here is branch period, keeping in case.
+    # CONFIG_CONTROL_UNCERTAINTY_ATM = {
+    #     "CESM2_WACCM_1850control": {
+    #         "case": "b.e21.BW1850.f09_g17.CMIP6-piControl.001",
+    #         "branch_period": (None, None),
+    #         "decadal_selection": slice(5, None, 10),
+    #         "**args": {"detrend": True},
+    #     },
+    #     "CESM2_WACCM_SSP2-4.5": {
+    #         "case": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+    #         "branch_period": (None, None),
+    #         "decadal_selection": None,
+    #         "**args": {"detrend": False},
+    #     },
+    # }
 
     # %%
-    # Compute mean piControl values and a 95% confidence interval for significance testing
-    if machine == "glade":
-        prism_root = "/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/"
-    elif machine == "curc":
-        prism_root = "/home/josh2250/projects/PRISM/"
-    ohc_spatial_save_root = prism_root + "data/spatial_maps_ohc/"
-    pi_name = 'CESM2_WACCM_1850control'
-    pi_case = 'b.e21.BW1850.f09_g17.CMIP6-piControl.001'
-    pi_ohc = ohc_dict[pi_name][pi_case]
+    # Compute uncertainty for the control members using the generalized function
     var = "OHC"
-    save_dir = Path(ohc_spatial_save_root) / pi_name
-    save_file = f"{pi_case}.{var}.spatial_uncertainty.nc"
-    save_path = save_dir / save_file
-    if os.path.exists(save_path):
-        logging.info(f"{save_path} exists. Skipping")
-    else:
-        # Detrend the piControl OHC time series by removing the linear trend, which is a common practice to account for model drift in control simulations. This will help ensure that the confidence intervals reflect internal variability rather than long-term trends.
-        pi_ohc_annual = pi_ohc.groupby("time.year").mean()
-        del pi_ohc # Free memory
-        pi_ohc_annual = pi_ohc_annual.compute()
+    ohc_varlist = [var]
+    load_config_dict = CASE_CONFIGS_CONTROL_OCN
+    uncertainty_config_dict = CONFIG_CONTROL_UNCERTAINTY
+    assert load_config_dict.keys() == uncertainty_config_dict.keys(), "Keys in load_config_dict and uncertainty_config_dict do not match."
+    year_dim = "time"
+    for case_label, config in uncertainty_config_dict.items():
+        case = config["case"]
+        save_dir = Path(ohc_spatial_save_root) / case_label
+        save_file = f"{case}.{var}.spatial_uncertainty.nc"
+        save_path = save_dir / save_file
+        if os.path.exists(save_path):
+            logging.info(f"{save_path} exists. Skipping")
+            continue
+        ohc_control_dict = load_data_with_configs(
+            {case_label: load_config_dict[case_label]},
+            ohc_varlist,
+            year_dim=year_dim,
+        )
+        ohc_ds = ohc_control_dict[case_label][case]
+        # Detrend the OHC time series by removing the linear trend, which is a common practice to account for model drift in control simulations. This will help ensure that the confidence intervals reflect internal variability rather than long-term trends.
+        ohc_annual = compute_weighted_annual_mean(ohc_ds, account_for_leap=False)
+        del ohc_ds # Free memory
+        ohc_annual = ohc_annual.compute()
         
-        # Compute uncertainty using the generalized function, with decadal selection every 10 years starting from index 5
-        pi_ohc_all = compute_picontrol_uncertainty(
-            pi_ohc_annual,
+        # Compute uncertainty using the generalized function
+        ohc_all = compute_picontrol_uncertainty(
+            ohc_annual,
             variable_names=["OHC", "OHC_global_mean"],
-            branch_period=(50, 75),
-            decadal_selection=slice(5, None, 10)
+            branch_period=config["branch_period"],
+            decadal_selection=config["decadal_selection"],
+            **config["**args"],
         )
         logging.info(f"Starting compute")
-        pi_ohc_all = pi_ohc_all.compute()
+        ohc_all = ohc_all.compute()
         os.makedirs(save_dir, exist_ok=True)
-        pi_ohc_all.to_netcdf(save_path)
+        ohc_all.to_netcdf(save_path)
 
     # %%
     # For the future scenarios, compute the average fields over the 2060-2069 period.
-    spatial_save_root = prism_root + "data/spatial_maps_ohc/"
-    future_scenarios = ["CESM2_WACCM_SSP2-4.5", "ARISE-SAI", "CESM2_WACCM_SSP2-4.5_MCB"]
-    for scenario in future_scenarios:
-        save_dir = Path(spatial_save_root) / scenario
+    ohc_varlist = ["OHC"]
+    year_dim = "time"
+    load_config_dict = CASE_CONFIGS2
+    for scenario in load_config_dict.keys():
+        # Only load the data for the current scenario.
+        ohc_dict = load_data_with_configs({scenario: load_config_dict[scenario]}, ohc_varlist, year_dim=year_dim)
+        save_dir = Path(ohc_spatial_save_root) / scenario
         os.makedirs(save_dir, exist_ok=True)
         for case_str, ds in ohc_dict[scenario].items():
             save_file = f"{case_str}.{var}.spatial_mean2060_2069.nc"
@@ -724,55 +978,74 @@ if __name__ == "__main__":
                 logging.info(f"{save_path} exists. Skipping")
             else:
                 logging.info(f"Saving to {save_path}")
-                ds.to_netcdf(save_path)
+                ds.to_netcdf(save_path) # Implicitly calls compute() here, but perhaps not as efficient?
+
+    # Clean up
+    del ohc_dict
+    del ds
 
     # %%
-    # Generalize to apply to the ATM variables
-    atm_varlist = ['CLDTOT', 'FLNR', 'FLNS', 'FLNSC', 'FLNT', 'FLNTC', 'FLNTCLR', 'FLUT', 'FSNR', 'FSNS', 'FSNSC', 'FSNT', 'FSNTC', 'FSNTOA', 'FSNTOAC', 'LHFLX', 'SHFLX', 'TS', "PRECT", "PRECC", "PRECL", "PRECIP_THERMO"]
-    if machine == "glade":
-        prism_root = "/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/"
-    elif machine == "curc":
-        prism_root = "/home/josh2250/projects/PRISM/"
-    spatial_save_root = prism_root + "data/spatial_maps/"
-    pi_name = 'CESM2_WACCM_1850control'
-    pi_case = 'b.e21.BW1850.f09_g17.CMIP6-piControl.001'
-    future_scenarios = ["CESM2_WACCM_SSP2-4.5", "ARISE-SAI", "CESM2_WACCM_SSP2-4.5_MCB"]
-
+    # Apply to the ATM variables
     # Process each variable separately for memory reasons.
+
+    # Compute the uncertainty for each ATM variable from the control period.
+    load_config_dict = CASE_CONFIGS_CONTROL_ATM
+    uncertainty_config_dict = CONFIG_CONTROL_UNCERTAINTY
+    year_dim = "time"
     for var in atm_varlist:
         logging.info(f"Processing {var}")
-        var_data_dict = load_data_with_configs(CASE_CONFIGS1, [var], year_dim=year_dim)
-        if not pi_case in var_data_dict[pi_name].keys():
-            logging.info(f"{pi_case} not found")
-        else:
-            pi_ds = var_data_dict[pi_name][pi_case]
-
-            save_dir = Path(spatial_save_root) / pi_name
-            save_file = f"{pi_case}.{var}.spatial_uncertainty.nc"
+        for case_label, config in uncertainty_config_dict.items():
+            save_dir = Path(atm_spatial_save_root) / case_label
+            case = config["case"]
+            save_file = f"{case}.{var}.spatial_uncertainty.nc"
             save_path = save_dir / save_file
             if os.path.exists(save_path):
                 logging.info(f"{save_path} exists. Skipping")
-            else:
-                # Detrend the piControl time series by removing the linear trend, which is a common practice to account for model drift in control simulations. This will help ensure that the confidence intervals reflect internal variability rather than long-term trends.
-                pi_annual = pi_ds.groupby("time.year").mean()
-                del pi_ds # Free memory
-                pi_annual = pi_annual.compute()
-                
-                # Compute uncertainty using the generalized function, with decadal selection every 10 years starting from index 5
-                pi_all = compute_picontrol_uncertainty(
-                    pi_annual,
-                    variable_names=[var],
-                    branch_period=(50, 75),
-                    decadal_selection=slice(5, None, 10)
-                )
-                logging.info(f"Starting compute")
-                pi_all = pi_all.compute()
-                os.makedirs(save_dir, exist_ok=True)
-                pi_all.to_netcdf(save_path)
+                continue
+            # Load the control data for only the current variable and case.
+            var_data_dict = load_data_with_configs(
+                {case_label: load_config_dict[case_label]},
+                [var],
+                year_dim=year_dim,
+                identifier="h0",
+            )
+            if len(var_data_dict[case_label]) == 0:
+                logging.warning(f"No data found for case {case_label} and variable {var}")
+                continue
+            atm_ds = var_data_dict[case_label][case]
 
-        # For the future scenarios, compute the average fields over the 2060-2069 period.
-        for scenario in future_scenarios:
-            save_dir = Path(spatial_save_root) / scenario
+            # Detrend the ATM time series by removing the linear trend, which is a common practice to account for model drift in control simulations. This will help ensure that the confidence intervals reflect internal variability rather than long-term trends.
+            atm_annual = compute_weighted_annual_mean(atm_ds, account_for_leap=False)
+            del atm_ds # Free memory
+            atm_annual = atm_annual[[var]].compute()
+
+            # Compute uncertainty using the generalized function
+            atm_all = compute_picontrol_uncertainty(
+                atm_annual,
+                variable_names=[var],
+                branch_period=config["branch_period"],
+                decadal_selection=config["decadal_selection"],
+                **config["**args"],
+            )
+            logging.info(f"Starting compute")
+            atm_all = atm_all.compute()
+            os.makedirs(save_dir, exist_ok=True)
+            atm_all.to_netcdf(save_path)
+
+    # %%
+    # Compute the 2060 - 2069 spatial means
+    load_config_dict = CASE_CONFIGS1
+    for var in atm_varlist:
+        logging.info(f"Processing {var}")
+        # for scenario in future_scenarios:
+        for scenario in load_config_dict.keys():
+            var_data_dict = load_data_with_configs(
+                {scenario: load_config_dict[scenario]},
+                [var],
+                year_dim=year_dim,
+                identifier="h0",
+            )
+            save_dir = Path(atm_spatial_save_root) / scenario
             os.makedirs(save_dir, exist_ok=True)
             for case_str, ds in var_data_dict[scenario].items():
                 save_file = f"{case_str}.{var}.spatial_mean2060_2069.nc"
@@ -782,3 +1055,74 @@ if __name__ == "__main__":
                 else:
                     logging.info(f"Saving to {save_path}")
                     ds.to_netcdf(save_path)
+
+    # %%
+    # Now repeat the process for the derived ATM variables.
+    # Compute the uncertainty for each ATM variable from the control period.
+    load_config_dict = CASE_CONFIGS_CONTROL_ATM_DERIVED
+    uncertainty_config_dict = CONFIG_CONTROL_UNCERTAINTY
+    year_dim = "time"
+    for var in atm_derived_varlist:
+        logging.info(f"Processing {var}")
+        for case_label, config in uncertainty_config_dict.items():
+            save_dir = Path(atm_spatial_save_root) / case_label
+            case = config["case"]
+            save_file = f"{case}.{var}.spatial_uncertainty.nc"
+            save_path = save_dir / save_file
+            if os.path.exists(save_path):
+                logging.info(f"{save_path} exists. Skipping")
+                continue
+            # Load the control data for only the current variable and case.
+            var_data_dict = load_data_with_configs(
+                {case_label: load_config_dict[case_label]},
+                [var],
+                year_dim=year_dim,
+                identifier="h0",
+            )
+            if len(var_data_dict[case_label]) == 0:
+                logging.warning(f"No data found for case {case_label} and variable {var}")
+                continue
+            atm_ds = var_data_dict[case_label][case]
+
+            # Detrend the ATM time series by removing the linear trend, which is a common practice to account for model drift in control simulations. This will help ensure that the confidence intervals reflect internal variability rather than long-term trends.
+            atm_annual = compute_weighted_annual_mean(atm_ds, account_for_leap=False)
+            del atm_ds # Free memory
+            atm_annual = atm_annual[[var]].compute()
+
+            # Compute uncertainty using the generalized function
+            atm_all = compute_picontrol_uncertainty(
+                atm_annual,
+                variable_names=[var],
+                branch_period=config["branch_period"],
+                decadal_selection=config["decadal_selection"],
+                **config["**args"],
+            )
+            logging.info(f"Starting compute")
+            atm_all = atm_all.compute()
+            os.makedirs(save_dir, exist_ok=True)
+            atm_all.to_netcdf(save_path)
+
+    # %%
+    # Compute the 2060 - 2069 spatial means
+    load_config_dict = CASE_CONFIGS1_DERIVED
+    for var in atm_derived_varlist:
+        logging.info(f"Processing {var}")
+        # for scenario in future_scenarios:
+        for scenario in load_config_dict.keys():
+            var_data_dict = load_data_with_configs(
+                {scenario: load_config_dict[scenario]},
+                [var],
+                year_dim=year_dim,
+                identifier="h0",
+            )
+            save_dir = Path(atm_spatial_save_root) / scenario
+            os.makedirs(save_dir, exist_ok=True)
+            for case_str, ds in var_data_dict[scenario].items():
+                save_file = f"{case_str}.{var}.spatial_mean2060_2069.nc"
+                save_path = save_dir / save_file
+                if os.path.exists(save_path):
+                    logging.info(f"{save_path} exists. Skipping")
+                else:
+                    logging.info(f"Saving to {save_path}")
+                    ds.to_netcdf(save_path)
+    # %%
