@@ -715,9 +715,9 @@ if __name__ == "__main__":
     CASE_CONFIGS1 = {
         "CESM_LME":{
             "path": root_dir + "data/RadInt_procdata/CESM_LME/",
-            "subdir_cases": ["b.e11.BLMTRC5CN.f19_g16.00?"],
+            "subdir_cases": ["b.e11.BLMTRC5CN.f19_g16.0??"],
             "append_cases": {
-                "b.e11.BLMTRC5CN.f19_g16.00?": None,
+                "b.e11.BLMTRC5CN.f19_g16.0??": None,
             },
             "ufunc": None,
         },
@@ -740,9 +740,9 @@ if __name__ == "__main__":
         },
         "CESM2_WACCM_HIST": {
             "path": root_dir + "data/RadInt_procdata/CESM2_WACCM_HIST/",
-            "subdir_cases": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?", "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001"],
+            "subdir_cases": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??", "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001"],
             "append_cases": {
-                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?": None,
+                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??": None,
                 "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001": None,
             },
             "ufunc": None,
@@ -757,19 +757,19 @@ if __name__ == "__main__":
         },
         "ARISE-SAI": {
             "path": root_dir + "data/RadInt_procdata/ARISE_SAI/",
-            "subdir_cases": ["1p5K-SAI.00?", "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?", "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?"],
+            "subdir_cases": ["1p5K-SAI.0??", "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??", "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??"],
             "append_cases": {
-                "1p5K-SAI.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?": "1p5K-SAI.00?",
+                "1p5K-SAI.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??": "1p5K-SAI.0??",
             },
             "ufunc": None,
         },
         "CESM2_WACCM_SSP2-4.5_MCB": {
             "path": root_dir + "data/RadInt_procdata/CESM2_WACCM_SSP2-4.5_MCB/",
-            "subdir_cases": ["b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?", "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000"],
+            "subdir_cases": ["b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??", "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000"],
             "append_cases": {
-                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
                 "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
                 "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
                 "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
@@ -805,9 +805,9 @@ if __name__ == "__main__":
         },
         "CESM2_WACCM_HIST": {
             "path": ohc_data_root + "CESM2_WACCM_HIST/",
-            "subdir_cases": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?", "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001"],
+            "subdir_cases": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??", "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001"],
             "append_cases": {
-                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?": None,
+                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??": None,
                 "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001": None,
             },
             "ufunc": None,
@@ -822,19 +822,19 @@ if __name__ == "__main__":
         },
         "ARISE-SAI": {
             "path": ohc_data_root + "ARISE_SAI/",
-            "subdir_cases": ["1p5K-SAI.00?", "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?", "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?"],
+            "subdir_cases": ["1p5K-SAI.0??", "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??", "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??"],
             "append_cases": {
-                "1p5K-SAI.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?": "1p5K-SAI.00?",
+                "1p5K-SAI.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??": "1p5K-SAI.0??",
             },
             "ufunc": None,
         },
         "CESM2_WACCM_SSP2-4.5_MCB": {
             "path": ohc_data_root + "CESM2_WACCM_SSP2-4.5_MCB/",
-            "subdir_cases": ["b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?", "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000"],
+            "subdir_cases": ["b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??", "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000", "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000"],
             "append_cases": {
-                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
                 "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
                 "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
                 "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
@@ -861,7 +861,7 @@ if __name__ == "__main__":
     earth_SA_cam = 4 * np.pi * earth_radius_cam**2
     PLOT_CONFIGS1 = {
         "CESM_LME": {
-            "selfunc": lambda ds: ds['b.e11.BLMTRC5CN.f19_g16.00?'].sel(ens="002"),
+            "selfunc": lambda ds: ds['b.e11.BLMTRC5CN.f19_g16.0??'].sel(ens="002"),
             # "ax1_lims": (228, 237),
             # "ax2_lims": (-3, 6),
             "ax1_lims": (230, 240),
@@ -1070,10 +1070,10 @@ if __name__ == "__main__":
             "keep_right_axes": False,
         },
         "ARISE-SAI": {
-            "selfunc": lambda ds: ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?'].mean("ens"),
-            "selfunc_ohc": lambda ds: ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?']["OHC_global_mean"].sel(ohc_depth=-1).mean("ens") * ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?'].attrs["ocean_area_m2"] / earth_SA_cam,
-            # "selfunc_ohc": lambda ds: ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?']["OHC_global_mean"].sel(ohc_depth=-1).mean("ens") * ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?'].attrs["ocean_area_m2"] / ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?'].attrs["global_area_m2"],
-            # "selfunc_ohc": lambda ds: ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?']["OHC_global_mean"].sel(ohc_depth=-1).mean("ens"),
+            "selfunc": lambda ds: ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??'].mean("ens"),
+            "selfunc_ohc": lambda ds: ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??']["OHC_global_mean"].sel(ohc_depth=-1).mean("ens") * ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??'].attrs["ocean_area_m2"] / earth_SA_cam,
+            # "selfunc_ohc": lambda ds: ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??']["OHC_global_mean"].sel(ohc_depth=-1).mean("ens") * ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??'].attrs["ocean_area_m2"] / ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??'].attrs["global_area_m2"],
+            # "selfunc_ohc": lambda ds: ds['b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??']["OHC_global_mean"].sel(ohc_depth=-1).mean("ens"),
             "ax1_lims": (236, 245),
             "ax2_lims": (-5, 4),
             # "axb1_lims": (0.0e24, 2.5e24),
@@ -1084,9 +1084,9 @@ if __name__ == "__main__":
             "keep_right_axes": False,
         },
         "CESM2_WACCM_SSP2-4.5_MCB": {
-            "selfunc": lambda ds: ds['b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?'].mean("ens"),
-            "selfunc_ohc": lambda ds: ds['b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?']["OHC_global_mean"].sel(ohc_depth=-1).mean("ens") * ds['b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?'].attrs["ocean_area_m2"] / earth_SA_cam,
-            # "selfunc_ohc": lambda ds: ds['b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?']["OHC_global_mean"].sel(ohc_depth=-1).mean("ens") * ds['b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?'].attrs["ocean_area_m2"] / ds['b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?'].attrs["global_area_m2"],
+            "selfunc": lambda ds: ds['b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??'].mean("ens"),
+            "selfunc_ohc": lambda ds: ds['b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??']["OHC_global_mean"].sel(ohc_depth=-1).mean("ens") * ds['b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??'].attrs["ocean_area_m2"] / earth_SA_cam,
+            # "selfunc_ohc": lambda ds: ds['b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??']["OHC_global_mean"].sel(ohc_depth=-1).mean("ens") * ds['b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??'].attrs["ocean_area_m2"] / ds['b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??'].attrs["global_area_m2"],
             "ax1_lims": (236, 245),
             "ax2_lims": (-5, 4),
             # "axb1_lims": (0.0e24, 2.5e24),

@@ -351,7 +351,7 @@ if __name__ == "__main__":
         "CESM2_WACCM_HIST": {
             "sources": ["/glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/", f"{derivedpath_atm_root}/CESM2_WACCM_HIST/"],
             "subsources": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001", "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.002", "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.003"],
-            "file_pattern": "atm/proc/tseries/month_1/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?.cam.h0.*.nc",
+            "file_pattern": "atm/proc/tseries/month_1/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??.cam.h0.*.nc",
         },
         "ARISE_SAI": {
             "sources": ["/gdex/data/d651059/ARISE-SAI-1.5/", f"{derivedpath_atm_root}/ARISE_SAI/"],

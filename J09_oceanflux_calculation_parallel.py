@@ -164,42 +164,6 @@ def shift_noleap_time_back_one_month(time_values):
     )
 
 
-def get_weights_by_month2(
-    time_ds,
-    account_for_leap: bool = False,
-):
-
-    days_per_month = np.array([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
-    days_per_month_leap = np.array([31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
-    seconds_per_month = 60 * 60 * 24 * days_per_month
-    seconds_per_month_leap = 60 * 60 * 24 * days_per_month_leap
-
-    weights = xr.DataArray(
-        data=seconds_per_month,
-        dims=["month"],
-        coords={
-            "month": np.arange(1,13),
-        }
-    )
-    weights_leap = xr.DataArray(
-        data=seconds_per_month_leap,
-        dims=["month"],
-        coords={
-            "month": np.arange(1,13),
-        }
-    )
-
-    month_values = time_ds.dt.month
-    year_values = time_ds.dt.year
-
-    # Vectorized selection of the appropriate weights for each time point
-    if account_for_leap:
-        weights = xr.where((year_values % 4 == 0), weights_leap.sel(month=month_values), weights.sel(month=month_values))
-    else:
-        weights = weights.sel(month=month_values)
-    return weights
-
-
 # %%
 if __name__ == "__main__":
     # If on glade
@@ -213,7 +177,7 @@ if __name__ == "__main__":
         },
         "CESM2_WACCM_HIST": {
             "data_dir": "/glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/",
-            "file_patterns": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?/ocn/proc/tseries/month_1/"]
+            "file_patterns": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??/ocn/proc/tseries/month_1/"]
         },
         "CESM2_WACCM_1850control": {
             "data_dir": "/glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/b.e21.BW1850.f09_g17.CMIP6-piControl.001",
@@ -221,14 +185,14 @@ if __name__ == "__main__":
         },
         "CESM2_WACCM_SSP2-4.5": {
             "data_dir": "/gdex/data/d651045/CESM2-WACCM-SSP245",
-            "file_patterns": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?/ocn/proc/tseries/month_1/"]
+            "file_patterns": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??/ocn/proc/tseries/month_1/"]
         },
         "ARISE_SAI": {
             "data_dir": "/gdex/data/d651059/ARISE-SAI-1.5",
             "file_patterns": [
-                "b.e21.BW.f09_g17.SSP245-G6-1p5K-SAI.00?/ocn/proc/tseries/month_1/",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?/ocn/proc/tseries/month_1/",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?/ocn/proc/tseries/month_1/",
+                "b.e21.BW.f09_g17.SSP245-G6-1p5K-SAI.0??/ocn/proc/tseries/month_1/",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??/ocn/proc/tseries/month_1/",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??/ocn/proc/tseries/month_1/",
             ]
         },
         "CESM2_WACCM_SSP2-4.5_MCB": {

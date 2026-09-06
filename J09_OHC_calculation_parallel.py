@@ -221,7 +221,7 @@ if __name__ == "__main__":
         },
         "CESM2_WACCM_HIST": {
             "data_dir": "/glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/",
-            "file_patterns": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?/ocn/proc/tseries/month_1/"]
+            "file_patterns": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??/ocn/proc/tseries/month_1/"]
         },
         "CESM2_WACCM_1850control": {
             "data_dir": "/glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/b.e21.BW1850.f09_g17.CMIP6-piControl.001",
@@ -229,14 +229,14 @@ if __name__ == "__main__":
         },
         "CESM2_WACCM_SSP2-4.5": {
             "data_dir": "/gdex/data/d651045/CESM2-WACCM-SSP245",
-            "file_patterns": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?/ocn/proc/tseries/month_1/"]
+            "file_patterns": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??/ocn/proc/tseries/month_1/"]
         },
         "ARISE_SAI": {
             "data_dir": "/gdex/data/d651059/ARISE-SAI-1.5",
             "file_patterns": [
-                "b.e21.BW.f09_g17.SSP245-G6-1p5K-SAI.00?/ocn/proc/tseries/month_1/",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?/ocn/proc/tseries/month_1/",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?/ocn/proc/tseries/month_1/",
+                "b.e21.BW.f09_g17.SSP245-G6-1p5K-SAI.0??/ocn/proc/tseries/month_1/",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??/ocn/proc/tseries/month_1/",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??/ocn/proc/tseries/month_1/",
             ]
         },
         "CESM2_WACCM_SSP2-4.5_MCB": {

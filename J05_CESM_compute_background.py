@@ -118,17 +118,17 @@ if __name__ == "__main__":
     case_dict = {
         "CESM2_WACCM_HIST_1850_1864": {
             "sources": ["/glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/", f"{derivedpath_atm_root}/CESM2_WACCM_HIST/"],
-            "file_pattern": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?/atm/proc/tseries/month_1/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?.cam.h0.*.nc",
+            "file_pattern": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??/atm/proc/tseries/month_1/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??.cam.h0.*.nc",
             "tslice": slice("1850", "1864"),
         },
         "CESM2_WACCM_HIST_2000_2014": {
             "sources": ["/glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/", f"{derivedpath_atm_root}/CESM2_WACCM_HIST/"],
-            "file_pattern": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?/atm/proc/tseries/month_1/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?.cam.h0.*.nc",
+            "file_pattern": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??/atm/proc/tseries/month_1/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??.cam.h0.*.nc",
             "tslice": slice("2000", "2014"),
         },
         "CESM2_WACCM_HIST_2015_2034": {
             "sources": ["/glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/", f"{derivedpath_atm_root}/CESM2_WACCM_HIST/"],
-            "file_pattern": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?/atm/proc/tseries/month_1/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?.cam.h0.*.nc",
+            "file_pattern": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??/atm/proc/tseries/month_1/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??.cam.h0.*.nc",
             "tslice": slice("2015", "2034"),
         },
         "CESM2_WACCM_1850control_0100_0499": {
@@ -146,17 +146,17 @@ if __name__ == "__main__":
     ohc_case_dict = {
         "CESM2_WACCM_HIST_1850_1864": {
             "sources": [f"{derivedpath_ohc_root}/CESM2_WACCM_HIST/", f"{derivedpath_ohf_root}/CESM2_WACCM_HIST/"],
-            "file_pattern": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?/ocn/proc/tseries/month_1/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?.pop.h.*.nc",
+            "file_pattern": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??/ocn/proc/tseries/month_1/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??.pop.h.*.nc",
             "tslice": slice("1850", "1864"),
         },
         "CESM2_WACCM_HIST_2000_2014": {
             "sources": [f"{derivedpath_ohc_root}/CESM2_WACCM_HIST/", f"{derivedpath_ohf_root}/CESM2_WACCM_HIST/"],
-            "file_pattern": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?/ocn/proc/tseries/month_1/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?.pop.h.*.nc",
+            "file_pattern": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??/ocn/proc/tseries/month_1/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??.pop.h.*.nc",
             "tslice": slice("2000", "2014"),
         },
         "CESM2_WACCM_HIST_2015_2034": {
             "sources": [f"{derivedpath_ohc_root}/CESM2_WACCM_HIST/", f"{derivedpath_ohf_root}/CESM2_WACCM_HIST/"],
-            "file_pattern": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?/ocn/proc/tseries/month_1/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?.pop.h.*.nc",
+            "file_pattern": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??/ocn/proc/tseries/month_1/b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??.pop.h.*.nc",
             "tslice": slice("2015", "2034"),
         },
         "CESM2_WACCM_1850control_0100_0499": {
