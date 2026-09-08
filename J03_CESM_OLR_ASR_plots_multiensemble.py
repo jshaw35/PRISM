@@ -105,9 +105,9 @@ def compute_decadal2(
 ):
     if "time" in ds.coords:
         ds_annual = weighted_annualmean(ds)
-        ds_decadal = ds_annual.rolling(year=10, min_periods=10, center=True).mean(dim="year")
+        ds_decadal = ds_annual.rolling(year=10, min_periods=10, center=center).mean()
     elif "year" in ds.coords:
-        ds_decadal = ds.rolling(year=10, min_periods=10, center=True).mean(dim="year")
+        ds_decadal = ds.rolling(year=10, min_periods=10, center=center).mean()
     return ds_decadal
 
 
@@ -174,7 +174,7 @@ def extract_ensemble_numbers(filenames):
         
         for part in parts:
             if len(part) == 3 and part.isdigit():
-                ens_number = part
+                ens_number = int(part)
                 break
         
         if ens_number is not None:
@@ -452,8 +452,10 @@ def load_data_with_configs(CASE_CONFIGS, varlist, year_dim="time", load_into_mem
                                             logging.info(f"Appending ensemble {ens} from {append_case_label}")
                                         else:
                                             append_ds_ens = append_candidate.sel(ens=append_candidate_ens_vals_first, drop=False)
+                                            # Rename the ensemble value to match the current case
+                                            append_ds_ens = append_ds_ens.assign_coords(ens=ens)
                                             logging.warning(f"Ensemble {ens} not found in append case {append_case_label}. Using first available ensemble {append_candidate_ens_vals_first}.")
-                                appended_list.append(append_ds_ens)
+                                    appended_list.append(append_ds_ens)
                                 append_ds = xr.concat(appended_list, dim="ens")
                             else:
                                 # No ens dimension in append candidate, use as-is
@@ -539,11 +541,11 @@ if __name__ == "__main__":
         "CESM2-WACCM-HIST": {
             "path": f"{data_root}/CESM2_WACCM_HIST/",
             "subdir_cases": [
-                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001",
+                # "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001",
                 "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??",
             ],
             "append_cases": {
-                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001": None,
+                # "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001": None,
                 "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??": None,
             },
             "ufunc": None,
@@ -664,7 +666,7 @@ if __name__ == "__main__":
         },
         "CESM2-WACCM-HIST": {
             "titles": {
-                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001": "CESM2 WACCM HIST",
+                # "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001": "CESM2 WACCM HIST",
                 "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??": "CESM2 WACCM HIST",
             },
             "ylims": (lowlim_ssp245, highlim_ssp245),
@@ -814,11 +816,12 @@ if __name__ == "__main__":
     # Plot the CESM LME, SSP2-4.5, and ARISE-SAI data annually and decadally for the global mean in a 1x3 subplot grid
     # fig,axs = plt.subplots(1,3, figsize=(16,4.5))
     fig, axes = plt.subplots(3, 4, figsize=(20, 13))
+    # fig, axes = plt.subplots(4, 3, figsize=(13.5, 19))
     axs = axes.flatten()
-    fig.subplots_adjust(wspace=0.25, hspace=0.25)
-    # caxes = [fig.add_axes([0.33, 0.15, 0.01, 0.7]), fig.add_axes([0.62, 0.15, 0.01, 0.7]), fig.add_axes([0.905, 0.15, 0.01, 0.7])] # create separate colorbar axes for each subplot
-    # case_list = ["CESM2-SSP2-4.5", "ARISE-SAI_extended", "CESM2_WACCM_SSP2-4.5_MCB", "ARISE-1.0"]
+    fig.subplots_adjust(wspace=0.18, hspace=0.18)
     # Documentation for naming: https://www.cesm.ucar.edu/community-projects/arise-sai
+    # The control experiments are documented here: https://data.ucar.edu/dataset/cesm2-waccm6-ssp245
+    # The first 5 to out to 2100 and the later five only go out to 2069.
     subplot_pairs = [
         ["CESM2-WACCM-HIST", 'b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??'],
         ["CESM2_WACCM_SSP2-4.5", 'b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??'],
@@ -932,7 +935,16 @@ if __name__ == "__main__":
     # Hide the x axis labels outside of the bottom row and the y axis labels outside of the leftmost column
     for ax in axes[:-1, :].flat:
         ax.set_xlabel("")
+        ax.set_xticklabels([])
     for ax in axes[:, 1:].flat:
         ax.set_ylabel("")
+        ax.set_yticklabels([])
+
+    # Add text to the whole figure to serve as x-axis for all subplots
+    for ax in axes.flat:
+        ax.set_xlabel("")
+        ax.set_ylabel("")
+    fig.text(0.51, 0.07, "OLR (Wm$^{-2}$)", ha="center", va="center", fontsize=15)
+    fig.text(0.09, 0.5, "ASR (Wm$^{-2}$)", ha="center", va="center", fontsize=15, rotation=90)
 
 # %%
