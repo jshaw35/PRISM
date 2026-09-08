@@ -811,6 +811,10 @@ if __name__ == "__main__":
             zorder=0,
         )
     axs[-1].set_ylabel("")
+    # %%
+    fig.savefig("figures/figure_OLR_ASR_past.png", dpi=300, bbox_inches='tight')
+    logging.info("Saved figure_OLR_ASR_past.png")
+    plt.close(fig)
 
     # %%
     # Plot the CESM LME, SSP2-4.5, and ARISE-SAI data annually and decadally for the global mean in a 1x3 subplot grid
@@ -947,4 +951,8 @@ if __name__ == "__main__":
     fig.text(0.51, 0.07, "OLR (Wm$^{-2}$)", ha="center", va="center", fontsize=15)
     fig.text(0.09, 0.5, "ASR (Wm$^{-2}$)", ha="center", va="center", fontsize=15, rotation=90)
 
-# %%
+    # %%
+    fig.savefig("figures/figure_OLR_ASR_future.png", dpi=300, bbox_inches='tight')
+    logging.info("Saved figure_OLR_ASR_future.png")
+    plt.close(fig)
+    # %%
