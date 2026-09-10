@@ -279,8 +279,8 @@ def plot_ieei_ts_ohc(
     # Plot annual means from individual ensemble mebers (thin, semi-transparent)
     if "ens" in ieei_annual.dims:
         for ens_member in ieei_annual["ens"].values:
-            ax1.plot(ieei_annual[time_dim], ieei_annual.sel(ens=ens_member), color=ieei_color, linestyle="-", 
-                     linewidth=0.7, alpha=0.5)
+            ax1.plot(ieei_annual[time_dim], ieei_annual.sel(ens=ens_member), color=ieei_color,          
+                     linestyle="-", linewidth=0.7, alpha=0.5)
             ax2.plot(ts_annual[time_dim], ts_annual.sel(ens=ens_member), color=ts_color, linestyle="-", 
                      linewidth=0.7, alpha=0.5)
             ax1.plot(ohc_annual[time_dim], ohc_annual.sel(ens=ens_member), color=ohc_color, linestyle="-", 
@@ -290,7 +290,7 @@ def plot_ieei_ts_ohc(
         ts_decadal = ts_decadal.mean(dim="ens")
         ohc_decadal = ohc_decadal.mean(dim="ens")
     else:
-        ax1.plot(asr_annual[time_dim], asr_annual, color=ieei_color, linestyle="-", 
+        ax1.plot(ieei_annual[time_dim], ieei_annual, color=ieei_color, linestyle="-", 
                     linewidth=0.7, alpha=0.5)
         ax2.plot(ts_decadal[time_dim], ts_decadal, color=ts_color, linestyle="-", 
                     linewidth=0.7, alpha=0.5)
@@ -752,6 +752,14 @@ def load_data_with_configs(CASE_CONFIGS, varlist, year_dim="time", load_into_mem
     return data_dict
 
 
+def remove_axis_text_objects(ax, remove_strings: list = None):
+    """Remove all Text artists explicitly added to an Axes."""
+    for text in ax.texts:
+        for _str in remove_strings:
+            if _str in text.get_text():
+                text.remove()
+
+
 # %%
 
 if __name__ == "__main__":
@@ -1155,17 +1163,22 @@ if __name__ == "__main__":
     earth_SA_cam = 4 * np.pi * earth_radius_cam**2
 
     # Shared y-axis and time limits for easier updating across future-scenario plots
-    SHARED_PLOT_LIMITS = {
+    ALL_SHARED_PLOT_LIMITS = {
         "ax1_lims": (236, 245),
         "ax2_lims": (-5, 4),
         "axb1_lims": (-0.1e9, 6e9),
         "axb2_lims": (286.0, 293.0),
     }
-
+    SOME_SHARED_PLOT_LIMITS = {
+        "xlims": (2015, 2100),
+        "keep_left_axes": False,
+        "keep_right_axes": True,
+        "preceding_case": ["CESM2-WACCM-HIST", "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??"],
+    }
     PLOT_CONFIGS2 = {
         'CESM2-WACCM-HIST': {
             "case_str": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??",
-            **SHARED_PLOT_LIMITS,
+            **ALL_SHARED_PLOT_LIMITS,
             "xlims": (1850, 2015),
             "keep_left_axes": True,
             "keep_right_axes": False,
@@ -1173,23 +1186,17 @@ if __name__ == "__main__":
         },
         'CESM2_WACCM_SSP2-4.5': {
             "case_str": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-            **SHARED_PLOT_LIMITS,
-            "xlims": (2015, 2100),
-            "keep_left_axes": False,
-            "keep_right_axes": False,
-            "preceding_case": ["CESM2-WACCM-HIST", "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??"],
+            **ALL_SHARED_PLOT_LIMITS,
+            **SOME_SHARED_PLOT_LIMITS,
         },
         "ARISE-SAI": {
             "case_str": "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??",
-            **SHARED_PLOT_LIMITS,
-            "xlims": (2015, 2100),
-            "keep_left_axes": False,
-            "keep_right_axes": False,
-            "preceding_case": ["CESM2-WACCM-HIST", "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??"],
+            **ALL_SHARED_PLOT_LIMITS,
+            **SOME_SHARED_PLOT_LIMITS,
         },
         "CESM2_WACCM_SSP2-4.5_MCB": {
             "case_str": "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??",
-            **SHARED_PLOT_LIMITS,
+            **ALL_SHARED_PLOT_LIMITS,
             "xlims": (2015, 2100),
             "keep_left_axes": False,
             "keep_right_axes": True,
@@ -1334,19 +1341,6 @@ if __name__ == "__main__":
             handles_b2, labels_b2 = axb2.get_legend_handles_labels()
             bottom_handles.extend(handles_b + handles_b2)
             bottom_labels.extend(["iEEI", "OHC", "Surface Temperature"])
-        # break
-
-    # # Create a single legend for the left column
-    # if top_handles and top_labels:
-    #     axes[0,0].legend(
-    #         top_handles, top_labels, loc='upper left', 
-    #         fontsize=12, framealpha=0.95,
-    #     )
-    # if bottom_handles and bottom_labels:
-    #     axes[1,0].legend(
-    #         bottom_handles, bottom_labels, loc='upper left', 
-    #         fontsize=12, framealpha=0.95,
-    #     )
 
     # Create panel labels
     panel_labels = [f"{chr(97 + i)}." for i in range(len(axes.flat))]
@@ -1359,3 +1353,245 @@ if __name__ == "__main__":
     logging.info("Saved figure_timeseries_future.png")
     plt.close(fig)
     # %%
+
+    # Create a configs dictionary for a mega plot
+    ALL_SHARED_PLOT_LIMITS = {
+        "ax1_lims": (236, 245),
+        "ax2_lims": (-5, 4),
+        "axb1_lims": (-0.1e9, 6e9),
+        "axb2_lims": (286.0, 293.0),
+    }
+    SOME_SHARED_PLOT_LIMITS = {
+        "xlims": (2015, 2100),
+        "keep_left_axes": False,
+        "keep_right_axes": True,
+        "preceding_case": ["CESM2 WACCM HIST", "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??"],
+    }
+
+    title_dict = {
+        "CESM2-LME": {
+            "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.0??": "CESM2 LME",
+        },
+        "CESM2_WACCM_1850control" :{
+            "b.e21.BW1850.f09_g17.CMIP6-piControl.001": "CESM2 WACCM 1850 Control",
+        },
+        "CESM2-WACCM-HIST": {
+            "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??": "CESM2 WACCM HIST",
+        },
+        "CESM2_WACCM_SSP2-4.5": {
+            "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??": "CESM2 WACCM SSP2-4.5",
+        },
+        "ARISE-SAI": {
+            "1p5K-SAI.0??": "ARISE-SAI 1p5K",
+            "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??": "ARISE-SAI-1.5",
+            "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??": "ARISE-SAI-1.5 EXTENDED",
+        },
+        "ARISE-1.0": {
+            "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??": "ARISE-SAI-1.0",
+            "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??": "ARISE-SAI-1.37-2045",
+        },
+        "CESM2_WACCM_SSP2-4.5_MCB": {
+            "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??": "MCB SMBB-050PCT",
+            "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": "MCB CMIP6 baseline",
+            "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": "MCB CMIP6-025PCT",
+            "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": "MCB CMIP6-050PCT",
+            "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000": "MCB CMIP6-075PCT",
+            "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000": "MCB CMIP6-125PCT",
+        },
+    }
+    # Build a plot configs dictionary for a mega plot
+    megaplot_cases = [
+        "CESM2-WACCM-HIST",
+        "CESM2_WACCM_SSP2-4.5",
+        "ARISE-SAI",
+        "ARISE-1.0",
+        "CESM2_WACCM_SSP2-4.5_MCB",
+    ]
+    PLOT_CONFIGS_ALLFUTURE = {}
+    for case in megaplot_cases:
+        for experiment in title_dict[case]:
+            PLOT_CONFIGS_ALLFUTURE[title_dict[case][experiment]] = {
+                "case_str": case,
+                "exp_str": experiment,
+                **ALL_SHARED_PLOT_LIMITS,
+                **SOME_SHARED_PLOT_LIMITS,
+            }
+    # Apply corrections.
+    PLOT_CONFIGS_ALLFUTURE["CESM2 WACCM HIST"]["xlims"] = (1850, 2015)
+    PLOT_CONFIGS_ALLFUTURE["CESM2 WACCM HIST"]["keep_left_axes"] = True
+    PLOT_CONFIGS_ALLFUTURE["CESM2 WACCM HIST"]["keep_right_axes"] = False
+    PLOT_CONFIGS_ALLFUTURE["CESM2 WACCM HIST"]["preceding_case"] = None
+    # %%
+    logging.info("Creating Plot 3: All Future scenarios")
+    PLOT_CONFIGS = PLOT_CONFIGS_ALLFUTURE
+
+    nrows = 6
+    ncols = 4
+    fig, axes = plt.subplots(nrows, ncols, figsize=(20, 26))
+    fig.subplots_adjust(wspace=0.3)
+    top_axes = axes[::2, :]
+    bottom_axes = axes[1::2, :]
+    
+    start_year_2 = 1850
+    ts_var = "TS"
+    olr_var = "FLNT"
+    asr_var = "FSNT"
+    colors = sns.color_palette("colorblind", n_colors=6)
+
+    top_handles = []
+    bottom_handles = []
+    top_labels = []
+    bottom_labels = []
+    case_end_ohc_ieei_offsets = {}  # Dictionary to store the ending OHC and iEEI values for each case
+
+    for idx, (ax, axb, case_title) in enumerate(zip(top_axes.flatten(), bottom_axes.flatten(), PLOT_CONFIGS.keys())):
+        logging.info(f"Plotting case: {case_title}")
+
+        # Get case_str from config
+        case_label = PLOT_CONFIGS[case_title]["case_str"]
+        case_str = PLOT_CONFIGS[case_title]["exp_str"]
+
+        # Extract ASR and OLR data
+        asr_ds = data_dict[asr_var][case_label][case_str][asr_var].sel(spatial="G").squeeze().compute()
+        olr_ds = data_dict[olr_var][case_label][case_str][olr_var].sel(spatial="G").squeeze().compute()
+        ts_ds = data_dict[ts_var][case_label][case_str][ts_var].sel(spatial="G").squeeze().compute()
+        ohc_ds = ohc_dict[case_label][case_str].squeeze()
+        ohc_ds = ohc_ds["OHC_global_mean"].sel(ohc_depth=-1) * ohc_ds.attrs["ocean_area_m2"] / earth_SA_cam
+        ohc_ds = ohc_ds - ohc_ds.isel(time=0)  # Convert OHC to anomaly
+
+        # Because OHC and iEEI normalized to a time period, add the ending value of the preceding case to the current case for continuity
+        if "preceding_case" in PLOT_CONFIGS[case_title] and PLOT_CONFIGS[case_title]["preceding_case"] is not None:
+            ohc_offset = case_end_ohc_ieei_offsets[PLOT_CONFIGS[case_title]["preceding_case"][0]][PLOT_CONFIGS[case_title]["preceding_case"][1]]["ohc_end"]
+            ieei_offset = case_end_ohc_ieei_offsets[PLOT_CONFIGS[case_title]["preceding_case"][0]][PLOT_CONFIGS[case_title]["preceding_case"][1]]["ieei_end"]
+            ohc_ds = ohc_ds + ohc_offset
+        
+        # Compute annual means
+        asr_annual = weighted_annualmean(asr_ds)
+        olr_annual = weighted_annualmean(olr_ds)
+        ts_annual = weighted_annualmean(ts_ds)
+        eei_annual = asr_annual - olr_annual
+        ohc_annual = weighted_annualmean(ohc_ds) if ohc_ds is not None else None
+
+        # Compute decadal means
+        asr_decadal = compute_decadal2(asr_ds)
+        olr_decadal = compute_decadal2(olr_ds)
+        ts_decadal = compute_decadal2(ts_ds)
+        eei_decadal = asr_decadal - olr_decadal
+        ohc_decadal = compute_decadal2(ohc_ds) if ohc_ds is not None else None
+        
+        # Compute iEEI starting from start_year_2
+        ieei_ds = compute_ieei_with_start_year(asr_ds, olr_ds, start_year_2)
+        if "preceding_case" in PLOT_CONFIGS[case_title] and PLOT_CONFIGS[case_title]["preceding_case"] is not None:
+            ieei_ds = ieei_ds + ieei_offset
+        
+        # Create annual and decadal means for iEEI by grouping years
+        ieei_annual = weighted_annualmean(ieei_ds)
+        ieei_decadal = compute_decadal2(ieei_ds)
+
+        # Store the ending OHC and iEEI values for the current case
+        if "ens" in ohc_annual.dims:
+            case_end_ohc_ieei_offsets[case_title] = {case_str: {
+                "ohc_end": ohc_annual.isel(year=-1).mean(dim="ens").values,
+                "ieei_end": ieei_annual.isel(year=-1).mean(dim="ens").values},
+                                                    }
+        else:
+            case_end_ohc_ieei_offsets[case_title] = {case_str: {
+                "ohc_end": ohc_annual.isel(year=-1).values,
+                "ieei_end": ieei_annual.isel(year=-1).values},
+                                                    }
+
+        # Plot
+        ax1, ax2, ax3 = plot_eei_timeseries(
+            asr_annual, olr_annual, eei_annual, None,
+            asr_decadal, olr_decadal, eei_decadal, None,
+            ax=ax, fontsize=14, case_name=case_title,
+            colors=colors,
+        )
+
+        # Plot iEEI, TS, and OHC
+        if ohc_annual is not None:
+            axb, axb2 = plot_ieei_ts_ohc(
+                ieei_annual=ieei_annual, ieei_decadal=ieei_decadal,
+                ts_annual=ts_annual, ts_decadal=ts_decadal,
+                ohc_annual=ohc_annual, ohc_decadal=ohc_decadal,
+                ax=axb, colors=colors[3:], fontsize=14, time_dim="year",
+            )
+        else:
+            axb, axb2 = plot_ieei_ts(
+                ieei_annual=ieei_annual, ieei_decadal=ieei_decadal,
+                ts_annual=ts_annual, ts_decadal=ts_decadal,
+                ax=axb, colors=colors[3:], fontsize=14, time_dim="year",
+            )
+
+        ax1.set_xlim(PLOT_CONFIGS[case_title]["xlims"])
+        axb.set_xlim(PLOT_CONFIGS[case_title]["xlims"])
+        if "keep_left_axes" in PLOT_CONFIGS[case_title]:
+            if not PLOT_CONFIGS[case_title]["keep_left_axes"]:
+                ax1.set_ylabel('')
+                axb.set_ylabel('')
+        if "keep_right_axes" in PLOT_CONFIGS[case_title]:
+            if not PLOT_CONFIGS[case_title]["keep_right_axes"]:
+                ax2.set_ylabel('')
+                axb2.set_ylabel('')
+        # If not the last column, remove righthand side y-axis labels 
+        if (idx+1) % ncols != 0:
+            ax2.set_ylabel('')
+            axb2.set_ylabel('')
+        # If not the first column, remove lefthand side y-axis labels
+        if idx % ncols != 0:
+            ax1.set_ylabel('')
+            axb.set_ylabel('')
+        # Set y-axis limits
+        if "ax1_lims" in PLOT_CONFIGS[case_title]:
+            ax1.set_ylim(*PLOT_CONFIGS[case_title]["ax1_lims"])
+        if "ax2_lims" in PLOT_CONFIGS[case_title]:
+            ax2.set_ylim(*PLOT_CONFIGS[case_title]["ax2_lims"])
+
+        if "axb1_lims" in PLOT_CONFIGS[case_title]:
+            axb.set_ylim(*PLOT_CONFIGS[case_title]["axb1_lims"])
+        if "axb2_lims" in PLOT_CONFIGS[case_title]:
+            axb2.set_ylim(*PLOT_CONFIGS[case_title]["axb2_lims"])
+
+        # Add ensemble count annotation
+        n_ens = 1
+        if "ens" in asr_annual.dims:
+            n_ens = len(asr_annual["ens"])
+        ax1.text(0.98, 0.98, f"N={n_ens}", fontsize=12, fontweight="bold", 
+                transform=ax1.transAxes, verticalalignment='top', horizontalalignment='right')
+
+        # Add a horizontal line at y=0 for the EEI subplot
+        ax2.axhline(0, color='grey', linestyle='--', linewidth=1)
+        ax.set_facecolor("whitesmoke")
+        axb.set_facecolor("whitesmoke")
+
+        # Collect handles and labels from left column for combined legend
+        if idx == 0:
+            handles1, labels1 = ax1.get_legend_handles_labels()
+            handles2, labels2 = ax2.get_legend_handles_labels()
+            top_handles.extend(handles1 + handles2)
+            top_labels.extend(["ASR", "OLR", "EEI"])
+            handles_b, labels_b = axb.get_legend_handles_labels()
+            handles_b2, labels_b2 = axb2.get_legend_handles_labels()
+            bottom_handles.extend(handles_b + handles_b2)
+            bottom_labels.extend(["iEEI", "OHC", "Surface Temperature"])
+        # break
+
+    # Create panel labels
+    panel_labels = [f"{chr(97 + i)}." for i in range(len(axes.flat))]
+    for i, (ax, label) in enumerate(zip(axes.flat, panel_labels)):
+        ax.text(0.02, 0.98, label, fontsize=14, fontweight="bold", 
+                transform=ax.transAxes, verticalalignment='top')
+    # Only keep x-axis labels on the bottom row of subplots
+    for ax in axes[:-1,:].flat:
+        ax.set_xlabel('')
+    # Remove text objects replacing y-axis labels:
+    remove_strings = ["ASR", "OLR", "iEEI", "OHC"]
+    for ax in axes[:,1:].flat:
+        remove_axis_text_objects(ax, remove_strings)
+
+    # %%
+    fig.savefig("figures/figure_timeseries_futureALL.png", dpi=300, bbox_inches='tight')
+    logging.info("Saved figure_timeseries_futureALL.png")
+    plt.close(fig)
+    
+# %%
