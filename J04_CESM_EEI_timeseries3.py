@@ -330,6 +330,9 @@ def compute_ieei_with_start_year(
     # Compute iEEI using the existing function
     ieei_ds = compute_iEEI(olr_sliced, asr_sliced, account_for_leap=account_for_leap)
 
+    # Mask where asr and olr are nans
+    ieei_ds = ieei_ds.where(~np.isnan(asr_sliced) & ~np.isnan(olr_sliced))
+
     return ieei_ds
 
 

@@ -4,7 +4,6 @@ import os
 import xarray as xr
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib as mpl
 import seaborn as sns
 import pandas as pd
 from matplotlib.ticker import MultipleLocator
@@ -79,13 +78,6 @@ def compute_iEEI(
     ieei_ds = (eei_ds * weights).cumsum(dim="time") # J/m^2
 
     return ieei_ds
-
-    # Convert to Watt by multipling by the Earth's surface area
-    # CESM2 6.37122e6 m
-    # earth_radius = 6371e3 # kilometers
-    # earth_SA = 4 * np.pi * earth_radius**2
-
-    # return earth_SA * ieei_ds
 
 
 def get_weights_by_month2(
@@ -169,17 +161,26 @@ def plot_eei_timeseries(
     if ieei_annual is not None:
         ieei_color = colors[3]
 
-    # Plot annual means (thin, semi-transparent)
-    ax1.plot(asr_annual[time_dim], asr_annual, color=asr_color, linestyle="-", 
-             linewidth=0.7, alpha=0.5, label="ASR (annual)")
-    ax1.plot(olr_annual[time_dim], olr_annual, color=olr_color, linestyle="-", 
-             linewidth=0.7, alpha=0.5, label="OLR (annual)")
-    
-    ax2.plot(eei_annual[time_dim], eei_annual, color=eei_color, linestyle="-", 
-             linewidth=0.7, alpha=0.5, label="EEI (annual)")
-    if ieei_annual is not None:
-        ax3.plot(ieei_annual[time_dim], ieei_annual, color=ieei_color, linestyle="-", 
-                linewidth=0.7, alpha=0.5, label="iEEI (annual)")
+    # Plot annual means from individual ensemble mebers (thin, semi-transparent)
+    if "ens" in asr_annual.dims:
+        for ens_member in asr_annual["ens"].values:
+            ax1.plot(asr_annual[time_dim], asr_annual.sel(ens=ens_member), color=asr_color, linestyle="-", 
+                     linewidth=0.7, alpha=0.5)
+            ax1.plot(olr_annual[time_dim], olr_annual.sel(ens=ens_member), color=olr_color, linestyle="-", 
+                     linewidth=0.7, alpha=0.5)
+            ax2.plot(eei_annual[time_dim], eei_annual.sel(ens=ens_member), color=eei_color, linestyle="-", 
+                     linewidth=0.7, alpha=0.5)
+        # Now convert to the ensemble mean for the next step
+        asr_decadal = asr_decadal.mean(dim="ens")
+        olr_decadal = olr_decadal.mean(dim="ens")
+        eei_decadal = eei_decadal.mean(dim="ens")
+    else:
+        ax1.plot(asr_annual[time_dim], asr_annual, color=asr_color, linestyle="-", 
+                    linewidth=0.7, alpha=0.5)
+        ax1.plot(olr_annual[time_dim], olr_annual, color=olr_color, linestyle="-", 
+                    linewidth=0.7, alpha=0.5)
+        ax2.plot(eei_annual[time_dim], eei_annual, color=eei_color, linestyle="-", 
+                    linewidth=0.7, alpha=0.5)
     
     # Plot decadal means (thick, solid)
     ax1.plot(asr_decadal[time_dim], asr_decadal, color=asr_color, linestyle="-", 
@@ -196,10 +197,18 @@ def plot_eei_timeseries(
     
     # Set axis labels and colors
     ax1.set_xlabel("Year", fontsize=fontsize)
-    ax1.set_ylabel("ASR, OLR [W/m²]", fontsize=fontsize)
+    ax.text(
+        -0.15, 0.42, "ASR,",
+        transform=ax.transAxes, rotation=90,
+        ha="center", va="top", fontsize=fontsize, color=asr_color,
+    )
+    ax.text(
+        -0.15, 0.43, "OLR [Wm$^{-2}$]",
+        transform=ax.transAxes, rotation=90,
+        ha="center", va="bottom", fontsize=fontsize, color=olr_color,
+    )
     ax1.tick_params(axis="y")
-    
-    ax2.set_ylabel("EEI [W/m²]", fontsize=fontsize, color=eei_color)
+    ax2.set_ylabel("EEI [Wm$^{-2}$]", fontsize=fontsize, color=eei_color)
     ax2.tick_params(axis="y", labelcolor=eei_color)
     
     if ieei_annual is not None:
@@ -240,12 +249,12 @@ def plot_ieei_ts(
     ax2.plot(ts_decadal[time_dim], ts_decadal, color=colors[1], linestyle="-", 
                 linewidth=2.5, alpha=1, label="Surface Temperature (decadal)")
 
-    ax1.set_xlabel("Year", fontsize=14)
-    ax1.set_ylabel("iEEI [J]", fontsize=14)#, color=colors[0])
+    ax1.set_xlabel("Year", fontsize=fontsize)
+    ax1.set_ylabel("iEEI [Jm$^{-2}$]", fontsize=fontsize)#, color=colors[0])
     ax1.tick_params(axis="y")#, labelcolor=colors[0])
 
     ax2.tick_params(axis="y", labelcolor=colors[1])
-    ax2.set_ylabel("Surface Temperature [K]", fontsize=14, color=colors[1])
+    ax2.set_ylabel("Surface Temperature [K]", fontsize=fontsize, color=colors[1])
 
     return ax1, ax2
 
@@ -263,27 +272,55 @@ def plot_ieei_ts_ohc(
     ax1 = ax
     ax2 = ax.twinx()
     ax1.grid(True, alpha=0.3)
-    # Plot annual means (thin, solid)
-    ax1.plot(ieei_annual[time_dim], ieei_annual, color=colors[0], linestyle="-", 
-                linewidth=0.7, alpha=0.5, label="iEEI (annual)")
-    ax2.plot(ts_annual[time_dim], ts_annual, color=colors[1], linestyle="-", 
-                linewidth=0.7, alpha=0.5, label="Surface Temperature (annual)")
-    ax1.plot(ohc_annual[time_dim], ohc_annual, color=colors[2], linestyle="-", 
-                linewidth=0.7, alpha=0.5, label="OHC (annual)")
+    ieei_color = colors[0]
+    ts_color = colors[1]
+    ohc_color = colors[2]
+
+    # Plot annual means from individual ensemble mebers (thin, semi-transparent)
+    if "ens" in ieei_annual.dims:
+        for ens_member in ieei_annual["ens"].values:
+            ax1.plot(ieei_annual[time_dim], ieei_annual.sel(ens=ens_member), color=ieei_color, linestyle="-", 
+                     linewidth=0.7, alpha=0.5)
+            ax2.plot(ts_annual[time_dim], ts_annual.sel(ens=ens_member), color=ts_color, linestyle="-", 
+                     linewidth=0.7, alpha=0.5)
+            ax1.plot(ohc_annual[time_dim], ohc_annual.sel(ens=ens_member), color=ohc_color, linestyle="-", 
+                     linewidth=0.7, alpha=0.5)
+        # Now convert to the ensemble mean for the next step
+        ieei_decadal = ieei_decadal.mean(dim="ens")
+        ts_decadal = ts_decadal.mean(dim="ens")
+        ohc_decadal = ohc_decadal.mean(dim="ens")
+    else:
+        ax1.plot(asr_annual[time_dim], asr_annual, color=ieei_color, linestyle="-", 
+                    linewidth=0.7, alpha=0.5)
+        ax2.plot(ts_decadal[time_dim], ts_decadal, color=ts_color, linestyle="-", 
+                    linewidth=0.7, alpha=0.5)
+        ax1.plot(ohc_annual[time_dim], ohc_annual, color=ohc_color, linestyle="-", 
+                    linewidth=0.7, alpha=0.5)
+
     # Plot decadal means (thick, solid)
-    ax1.plot(ieei_decadal[time_dim], ieei_decadal, color=colors[0], linestyle="-", 
+    ax1.plot(ieei_decadal[time_dim], ieei_decadal, color=ieei_color, linestyle="-", 
                 linewidth=2.5, alpha=1, label="iEEI (decadal)")
-    ax2.plot(ts_decadal[time_dim], ts_decadal, color=colors[1], linestyle="-", 
+    ax2.plot(ts_decadal[time_dim], ts_decadal, color=ts_color, linestyle="-", 
                 linewidth=2.5, alpha=1, label="Surface Temperature (decadal)")
-    ax1.plot(ohc_decadal[time_dim], ohc_decadal, color=colors[2], linestyle="-", 
+    ax1.plot(ohc_decadal[time_dim], ohc_decadal, color=ohc_color, linestyle="-", 
                 linewidth=2.5, alpha=1, label="OHC (decadal)")
 
-    ax1.set_xlabel("Year", fontsize=14)
-    ax1.set_ylabel("iEEI, OHC [J]", fontsize=14)
-    ax1.tick_params(axis="y")
+    ax1.set_xlabel("Year", fontsize=fontsize)
+    ax1.text(
+        -0.15, 0.42, "iEEI,",
+        transform=ax.transAxes, rotation=90,
+        ha="center", va="top", fontsize=fontsize, color=ieei_color,
+    )
+    ax1.text(
+        -0.15, 0.43, "OHC [Jm$^{-2}$]",
+        transform=ax.transAxes, rotation=90,
+        ha="center", va="bottom", fontsize=fontsize, color=ohc_color,
+    )
+    # ax1.set_ylabel("iEEI, OHC [Jm$^{-2}$]", fontsize=14)
+    # ax1.tick_params(axis="y")
 
-    ax2.tick_params(axis="y", labelcolor=colors[1])
-    ax2.set_ylabel("Surface Temperature [K]", fontsize=14, color=colors[1])
+    ax2.tick_params(axis="y", labelcolor=ts_color)
+    ax2.set_ylabel("Surface Temperature [K]", fontsize=fontsize, color=ts_color)
 
     return ax1, ax2
 
@@ -333,6 +370,9 @@ def compute_ieei_with_start_year(
 
     # Compute iEEI using the existing function
     ieei_ds = compute_iEEI(olr_sliced, asr_sliced, account_for_leap=account_for_leap)
+
+    # Mask where asr and olr are nans
+    ieei_ds = ieei_ds.where(~np.isnan(asr_sliced) & ~np.isnan(olr_sliced))
 
     return ieei_ds
 
@@ -717,30 +757,28 @@ def load_data_with_configs(CASE_CONFIGS, varlist, year_dim="time", load_into_mem
 if __name__ == "__main__":
     data_root = "/glade/work/jonahshaw/PRISM_data/spatial_averages_data/"    
     CASE_CONFIGS_ATM = {
-        # "CESM2-LME": {
-        #     "path": f"{data_root}/CESM2_LME/",
-        #     "subdir_cases": ["b.e21.BWmaHIST.f19_g17.PMIP4-past1000.0??"],
-        #     "append_cases": {
-        #         "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.0??": None,
-        #     },
-        #     "ufunc": None,
-        # },
-        # "CESM2_WACCM_1850control" :{
-        #     "path": f"{data_root}/CESM2_WACCM_1850control/",
-        #     "subdir_cases": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"],
-        #     "append_cases": {
-        #         "b.e21.BW1850.f09_g17.CMIP6-piControl.001": None,
-        #     },
-        #     "ufunc": None,
-        # },
+        "CESM2-LM": {
+            "path": f"{data_root}/CESM2_LME/",
+            "subdir_cases": ["b.e21.BWmaHIST.f19_g17.PMIP4-past1000.0??"],
+            "append_cases": {
+                "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.0??": None,
+            },
+            "ufunc": None,
+        },
+        "CESM2_WACCM_1850control" :{
+            "path": f"{data_root}/CESM2_WACCM_1850control/",
+            "subdir_cases": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"],
+            "append_cases": {
+                "b.e21.BW1850.f09_g17.CMIP6-piControl.001": None,
+            },
+            "ufunc": None,
+        },
         "CESM2-WACCM-HIST": {
             "path": f"{data_root}/CESM2_WACCM_HIST/",
             "subdir_cases": [
-                # "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001",
                 "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??",
             ],
             "append_cases": {
-                # "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001": None,
                 "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??": None,
             },
             "ufunc": None,
@@ -749,96 +787,93 @@ if __name__ == "__main__":
              "path": f"{data_root}/CESM2_WACCM_SSP2-4.5/",
              "subdir_cases": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??"],
              "append_cases": {
-                #  "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001",
                  "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??": None,
              },
              "ufunc": None,
         },
-        # "ARISE-SAI": {
-        #     "path": f"{data_root}/ARISE_SAI/",
-        #     "subdir_cases": [
-        #         "1p5K-SAI.0??",
-        #         "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??",
-        #         "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??",
-        #     ],
-        #     "append_cases": {
-        #         "1p5K-SAI.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-        #         "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-        #         "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??": "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??",
-        #         # "1p5K-SAI.0??": None,
-        #         # "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??": None,
-        #         # "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??": None,
-        #     },
-        #     "ufunc": None,
-        # },
-        # "ARISE-1.0": {
-        #     "path": f"{data_root}/ARISE-1.0/",
-        #     "subdir_cases": [
-        #         "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??",
-        #         "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??",
-        #     ],
-        #     "append_cases": {
-        #         "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-        #         "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-        #         # "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??": None,
-        #         # "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??": None,
-        #     },
-        #     "ufunc": None,
-        # },
-        # "CESM2_WACCM_SSP2-4.5_MCB": {
-        #     "path": f"{data_root}/CESM2_WACCM_SSP2-4.5_MCB/",
-        #     "subdir_cases": [
-        #         "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??",
-        #         "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000",
-        #         "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000",
-        #         "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000",
-        #         "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000",
-        #         "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000",
-        #     ],
-        #     "append_cases": {
-        #         "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-        #         "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-        #         "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-        #         "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-        #         "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-        #         "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-        #         # "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??": None,
-        #         # "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": None,
-        #         # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": None,
-        #         # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": None,
-        #         # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000": None,
-        #         # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000": None,
-        #     },
-        #     "ufunc": None,
-        # },
+        "ARISE-SAI": {
+            "path": f"{data_root}/ARISE_SAI/",
+            "subdir_cases": [
+                "1p5K-SAI.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??",
+            ],
+            "append_cases": {
+                "1p5K-SAI.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??": "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??",
+                # "1p5K-SAI.0??": None,
+                # "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??": None,
+                # "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??": None,
+            },
+            "ufunc": None,
+        },
+        "ARISE-1.0": {
+            "path": f"{data_root}/ARISE-1.0/",
+            "subdir_cases": [
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??",
+            ],
+            "append_cases": {
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                # "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??": None,
+                # "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??": None,
+            },
+            "ufunc": None,
+        },
+        "CESM2_WACCM_SSP2-4.5_MCB": {
+            "path": f"{data_root}/CESM2_WACCM_SSP2-4.5_MCB/",
+            "subdir_cases": [
+                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000",
+            ],
+            "append_cases": {
+                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                # "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??": None,
+                # "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": None,
+                # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": None,
+                # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": None,
+                # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000": None,
+                # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000": None,
+            },
+            "ufunc": None,
+        },
     }
 
     data_root_ohc = "/glade/work/jonahshaw/PRISM_data/spatial_OHC_data/"    
     CASE_CONFIGS_OCN = {
-        # "CESM2-LME": {
-        #     "path": f"{data_root_ohc}/CESM2_LME/",
-        #     "subdir_cases": ["b.e21.BWmaHIST.f19_g17.PMIP4-past1000.0??"],
-        #     "append_cases": {
-        #         "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.0??": None,
-        #     },
-        #     "ufunc": None,
-        # },
-        # "CESM2_WACCM_1850control" :{
-        #     "path": f"{data_root_ohc}/CESM2_WACCM_1850control/",
-        #     "subdir_cases": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"],
-        #     "append_cases": {
-        #         "b.e21.BW1850.f09_g17.CMIP6-piControl.001": None,
-        #     },
-        #     "ufunc": None,
-        # },
+        "CESM2-LM": {
+            "path": f"{data_root_ohc}/CESM2_LME/",
+            "subdir_cases": ["b.e21.BWmaHIST.f19_g17.PMIP4-past1000.0??"],
+            "append_cases": {
+                "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.0??": None,
+            },
+            "ufunc": None,
+        },
+        "CESM2_WACCM_1850control" :{
+            "path": f"{data_root_ohc}/CESM2_WACCM_1850control/",
+            "subdir_cases": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"],
+            "append_cases": {
+                "b.e21.BW1850.f09_g17.CMIP6-piControl.001": None,
+            },
+            "ufunc": None,
+        },
         "CESM2-WACCM-HIST": {
             "path": f"{data_root_ohc}/CESM2_WACCM_HIST/",
             "subdir_cases": [
-                # "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001",
                 "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??",
             ],
             "append_cases": {
-                # "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001": None,
                 "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??": None,
             },
             "ufunc": None,
@@ -847,80 +882,79 @@ if __name__ == "__main__":
              "path": f"{data_root_ohc}/CESM2_WACCM_SSP2-4.5/",
              "subdir_cases": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??"],
              "append_cases": {
-                #  "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001",
                  "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??": None,
              },
              "ufunc": None,
         },
-        # "ARISE-SAI": {
-        #     "path": f"{data_root_ohc}/ARISE_SAI/",
-        #     "subdir_cases": [
-        #         "1p5K-SAI.0??",
-        #         "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??",
-        #         "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??",
-        #     ],
-        #     "append_cases": {
-        #         "1p5K-SAI.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-        #         "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-        #         "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??": "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??",
-        #         # "1p5K-SAI.0??": None,
-        #         # "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??": None,
-        #         # "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??": None,
-        #     },
-        #     "ufunc": None,
-        # },
-        # "ARISE-1.0": {
-        #     "path": f"{data_root_ohc}/ARISE-1.0/",
-        #     "subdir_cases": [
-        #         "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??",
-        #         "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??",
-        #     ],
-        #     "append_cases": {
-        #         "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-        #         "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-        #         # "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??": None,
-        #         # "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??": None,
-        #     },
-        #     "ufunc": None,
-        # },
-        # "CESM2_WACCM_SSP2-4.5_MCB": {
-        #     "path": f"{data_root_ohc}/CESM2_WACCM_SSP2-4.5_MCB/",
-        #     "subdir_cases": [
-        #         "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??",
-        #         "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000",
-        #         "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000",
-        #         "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000",
-        #         "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000",
-        #         "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000",
-        #     ],
-        #     "append_cases": {
-        #         "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-        #         "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-        #         "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-        #         "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-        #         "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-        #         "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-        #         # "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??": None,
-        #         # "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": None,
-        #         # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": None,
-        #         # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": None,
-        #         # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000": None,
-        #         # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000": None,
-        #     },
-        #     "ufunc": None,
-        # },
+        "ARISE-SAI": {
+            "path": f"{data_root_ohc}/ARISE_SAI/",
+            "subdir_cases": [
+                "1p5K-SAI.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??",
+            ],
+            "append_cases": {
+                "1p5K-SAI.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??": "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??",
+                # "1p5K-SAI.0??": None,
+                # "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??": None,
+                # "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??": None,
+            },
+            "ufunc": None,
+        },
+        "ARISE-1.0": {
+            "path": f"{data_root_ohc}/ARISE-1.0/",
+            "subdir_cases": [
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??",
+            ],
+            "append_cases": {
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                # "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??": None,
+                # "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??": None,
+            },
+            "ufunc": None,
+        },
+        "CESM2_WACCM_SSP2-4.5_MCB": {
+            "path": f"{data_root_ohc}/CESM2_WACCM_SSP2-4.5_MCB/",
+            "subdir_cases": [
+                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000",
+            ],
+            "append_cases": {
+                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                # "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??": None,
+                # "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": None,
+                # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": None,
+                # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": None,
+                # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000": None,
+                # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000": None,
+            },
+            "ufunc": None,
+        },
     }
 
     # %%
     # Load the data using the generalized loading function
-    data_varlist = ['FLNT', 'FSNT', 'TS'] # ['CLDTOT', 'FLNS', 'FLNSC', 'FLNT', 'FLUT', 'FSNS', 'FSNT', 'LHFLX', 'SHFLX', 'TS', "PRECIP_THERMO", "FNNT"] # "PRECT", "PRECC", "PRECL", 'FLNR', 'FSNR', 'FLNTC', 'FLNTCLR', 'FSNSC', 'FSNTC', 'FSNTOA', 'FSNTOAC',
+    data_varlist = ['FLNT', 'FSNT', 'TS']
     year_dim = "time"
     ohc_varlist = ["OHC", "OHC_global_mean"]
 
     # Load data using the generalized function (requires 4 nodes on CURC)
     data_dict = {}
     for var in data_varlist:
-        data_dict[var] = load_data_with_configs(CASE_CONFIGS_ATM, [var], year_dim=year_dim, load_into_memory=True)
+        data_dict[var] = load_data_with_configs(CASE_CONFIGS_ATM, [var], year_dim=year_dim, load_into_memory=False)
     
     ohc_dict = load_data_with_configs(CASE_CONFIGS_OCN, ohc_varlist, year_dim=year_dim, load_into_memory=False)
 
@@ -929,18 +963,7 @@ if __name__ == "__main__":
     earth_radius_cam = 6.37122e6
     earth_SA_cam = 4 * np.pi * earth_radius_cam**2
     PLOT_CONFIGS1 = {
-        # "CESM_LME": {
-        #     "case_str": "b.e11.BLMTRC5CN.f19_g16.0??",
-        #     "ax1_lims": (230, 240),
-        #     "ax2_lims": (-8, 2),
-        #     "ax1_major_y": MultipleLocator(1),
-        #     "axb2_lims": (286.25, 287.75),
-        #     "axb2_yticks": np.arange(286.25, 287.75+0.01, 0.25),
-        #     "xlims": (850, 1850),
-        #     "keep_left_axes": True,
-        #     "keep_right_axes": True,
-        # },
-        "CESM2-LME": {
+        "CESM2-LM": {
             "case_str": "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.0??",
             "ax1_lims": (237, 247),
             "ax2_lims": (-8, 2),
@@ -968,23 +991,25 @@ if __name__ == "__main__":
         },
     }
     # %%
-    # PLOT 1: Historical scenarios (CESM2-LME, CESM2_WACCM_1850control)
+    # PLOT 1: Historical scenarios (CESM2-LM, CESM2_WACCM_1850control)
     # Integration starts from year 850
-    logging.info("Creating Plot 1: Historical scenarios (CESM2-LME, CESM2_WACCM_1850control)")
+    logging.info("Creating Plot 1: Historical scenarios (CESM2_WACCM-LM, CESM2_WACCM_1850control)")
     PLOT_CONFIGS = PLOT_CONFIGS1
     
     fig, axes = plt.subplots(2, 2, figsize=(15, 10))
     fig.subplots_adjust(wspace=0.40)
     
-    case_list_1 = PLOT_CONFIGS1.keys()#["CESM2-LME", "CESM2_WACCM_1850control"]
+    case_list_1 = PLOT_CONFIGS1.keys()
     startyears_dict = {
         "CESM_LME": 850,
-        "CESM2-LME": 850,
+        "CESM2-LM": 850,
         "CESM2_WACCM_1850control": 1,
     }
     ts_var = "TS"
     olr_var = "FLNT"
     asr_var = "FSNT"
+    
+    colors = sns.color_palette("colorblind", n_colors=6)
 
     top_handles = []
     bottom_handles = []
@@ -1026,47 +1051,28 @@ if __name__ == "__main__":
         # Create annual and decadal means for iEEI by grouping years
         ieei_annual = weighted_annualmean(ieei_ds)
         ieei_decadal = compute_decadal2(ieei_ds)
-        
-        # Handle ensemble dimension if present
-        n_ens = 1
-        if "ens" in asr_annual.dims:
-            n_ens = len(asr_annual["ens"])
-            # Plot individual ensemble members (thin, alpha=0.5)
-            for ens_member in asr_annual["ens"].values:
-                ax.plot(asr_annual["year"], asr_annual.sel(ens=ens_member), 
-                       color=sns.color_palette("colorblind", n_colors=6)[0], linestyle="-", linewidth=0.7, alpha=0.5)
-                ax.plot(olr_annual["year"], olr_annual.sel(ens=ens_member), 
-                       color=sns.color_palette("colorblind", n_colors=6)[1], linestyle="-", linewidth=0.7, alpha=0.5)
-                ax.plot(eei_annual["year"], eei_annual.sel(ens=ens_member), 
-                       color=sns.color_palette("colorblind", n_colors=6)[2], linestyle="-", linewidth=0.7, alpha=0.5)
-        
+
         # Plot ASR, OLR, and EEI
         ax1, ax2, ax3 = plot_eei_timeseries(
             asr_annual, olr_annual, eei_annual, None,
             asr_decadal, olr_decadal, eei_decadal, None,
             ax=ax, fontsize=14, case_name=case_label,
-            colors=sns.color_palette("colorblind", n_colors=6),
+            colors=colors,
         )
         
         # Plot iEEI, TS, and OHC
-        if ohc_annual is not None:
-            # Handle ensemble dimension for OHC
-            if "ens" in ohc_annual.dims:
-                for ens_member in ohc_annual["ens"].values:
-                    axb.plot(ohc_annual.sel(ens=ens_member)["year"], ohc_annual.sel(ens=ens_member), 
-                            color=sns.color_palette("colorblind", n_colors=6)[5], linestyle="-", linewidth=0.7, alpha=0.5)
-            
+        if ohc_annual is not None:            
             axb, axb2 = plot_ieei_ts_ohc(
                 ieei_annual=ieei_annual, ieei_decadal=ieei_decadal,
                 ts_annual=ts_annual, ts_decadal=ts_decadal,
                 ohc_annual=ohc_annual, ohc_decadal=ohc_decadal,
-                ax=axb, colors=sns.color_palette("colorblind", n_colors=6)[3:], fontsize=14, time_dim="year",
+                ax=axb, colors=colors[3:], fontsize=14, time_dim="year",
             )
         else:
             axb, axb2 = plot_ieei_ts(
                 ieei_annual=ieei_annual, ieei_decadal=ieei_decadal,
                 ts_annual=ts_annual, ts_decadal=ts_decadal,
-                ax=axb, colors=sns.color_palette("colorblind", n_colors=6)[3:], fontsize=14, time_dim="year",
+                ax=axb, colors=colors[3:], fontsize=14, time_dim="year",
             )
 
         ax1.set_xlim(PLOT_CONFIGS[case_label]["xlims"])
@@ -1099,11 +1105,16 @@ if __name__ == "__main__":
             ax1.grid(True, alpha=0.3)
 
         # Add ensemble count annotation
-        ax1.text(0.94, 0.98, f"N={n_ens}", fontsize=12, fontweight="bold", 
-                transform=ax1.transAxes, verticalalignment='top')
+        n_ens = 1
+        if "ens" in asr_annual.dims:
+            n_ens = len(asr_annual["ens"])
+        ax1.text(0.98, 0.98, f"N={n_ens}", fontsize=12, fontweight="bold", 
+                transform=ax1.transAxes, verticalalignment='top', horizontalalignment='right')
 
         # Add a horizontal line at y=0 for the EEI subplot
         ax2.axhline(0, color='grey', linestyle='--', linewidth=1)
+        ax.set_facecolor("whitesmoke")
+        axb.set_facecolor("whitesmoke")
 
         # Collect handles and labels from left column for combined legend
         if idx == 0:
@@ -1117,21 +1128,22 @@ if __name__ == "__main__":
             bottom_labels.extend(["iEEI", "OHC", "Surface Temperature"])
 
     # Create a single legend for the left column
-    if top_handles and top_labels:
-        axes[0,0].legend(
-            top_handles, top_labels, loc='lower right', 
-            fontsize=12, framealpha=0.95,
-        )
-    if bottom_handles and bottom_labels:
-        axes[1,0].legend(
-            bottom_handles, bottom_labels, loc='lower right', 
-            fontsize=12, framealpha=0.95,
-        )
+    # if top_handles and top_labels:
+    #     axes[0,0].legend(
+    #         top_handles, top_labels, loc='lower right', 
+    #         fontsize=12, framealpha=0.95,
+    #     )
+    # if bottom_handles and bottom_labels:
+    #     axes[1,0].legend(
+    #         bottom_handles, bottom_labels, loc='lower right', 
+    #         fontsize=12, framealpha=0.95,
+    #     )
     # Create panel labels
-    panel_labels = [f"{chr(97 + i)}." for i in range(len(case_list_1))]
+    panel_labels = [f"{chr(97 + i)}." for i in range(len(axes.flat))]
     for i, (ax, label) in enumerate(zip(axes.flat, panel_labels)):
         ax.text(0.02, 0.98, label, fontsize=14, fontweight="bold", 
                 transform=ax.transAxes, verticalalignment='top')
+
 
     # %%
     fig.savefig("figures/figure_timeseries_past.png", dpi=300, bbox_inches='tight')
@@ -1141,42 +1153,47 @@ if __name__ == "__main__":
     # %%
     earth_radius_cam = 6.37122e6
     earth_SA_cam = 4 * np.pi * earth_radius_cam**2
+
+    # Shared y-axis and time limits for easier updating across future-scenario plots
+    SHARED_PLOT_LIMITS = {
+        "ax1_lims": (236, 245),
+        "ax2_lims": (-5, 4),
+        "axb1_lims": (-0.1e9, 6e9),
+        "axb2_lims": (286.0, 293.0),
+    }
+
     PLOT_CONFIGS2 = {
         'CESM2-WACCM-HIST': {
             "case_str": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??",
-            "ax1_lims": (236, 245),
-            "ax2_lims": (-5, 4),
-            "axb2_lims": (286.0, 293.0),
+            **SHARED_PLOT_LIMITS,
             "xlims": (1850, 2015),
             "keep_left_axes": True,
             "keep_right_axes": False,
+            "preceding_case": None,
         },
         'CESM2_WACCM_SSP2-4.5': {
             "case_str": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-            "ax1_lims": (236, 245),
-            "ax2_lims": (-5, 4),
-            "axb2_lims": (286.0, 293.0),
+            **SHARED_PLOT_LIMITS,
             "xlims": (2015, 2100),
-            "keep_left_axes": True,
+            "keep_left_axes": False,
             "keep_right_axes": False,
+            "preceding_case": ["CESM2-WACCM-HIST", "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??"],
         },
         "ARISE-SAI": {
             "case_str": "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??",
-            "ax1_lims": (236, 245),
-            "ax2_lims": (-5, 4),
-            "axb2_lims": (286.0, 293.0),
+            **SHARED_PLOT_LIMITS,
             "xlims": (2015, 2100),
             "keep_left_axes": False,
             "keep_right_axes": False,
+            "preceding_case": ["CESM2-WACCM-HIST", "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??"],
         },
         "CESM2_WACCM_SSP2-4.5_MCB": {
             "case_str": "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??",
-            "ax1_lims": (236, 245),
-            "ax2_lims": (-5, 4),
-            "axb2_lims": (286.0, 293.0),
+            **SHARED_PLOT_LIMITS,
             "xlims": (2015, 2100),
             "keep_left_axes": False,
             "keep_right_axes": True,
+            "preceding_case": ["CESM2-WACCM-HIST", "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??"],
         },
     }
 
@@ -1189,16 +1206,18 @@ if __name__ == "__main__":
     fig, axes = plt.subplots(2, 4, figsize=(20, 10))
     fig.subplots_adjust(wspace=0.35)
     
-    case_list_2 = ["CESM2-WACCM-HIST", "CESM2_WACCM_SSP2-4.5"]#, "ARISE-SAI", "CESM2_WACCM_SSP2-4.5_MCB"]
+    case_list_2 = ["CESM2-WACCM-HIST", "CESM2_WACCM_SSP2-4.5", "ARISE-SAI", "CESM2_WACCM_SSP2-4.5_MCB"]
     start_year_2 = 1850
     ts_var = "TS"
     olr_var = "FLNT"
     asr_var = "FSNT"
+    colors = sns.color_palette("colorblind", n_colors=6)
 
     top_handles = []
     bottom_handles = []
     top_labels = []
     bottom_labels = []
+    case_end_ohc_ieei_offsets = {}  # Dictionary to store the ending OHC and iEEI values for each case
 
     for idx, (ax, axb, case_label) in enumerate(zip(axes[0], axes[1], case_list_2)):
         logging.info(f"Plotting case: {case_label}")
@@ -1213,6 +1232,12 @@ if __name__ == "__main__":
         ohc_ds = ohc_dict[case_label][case_str].squeeze()
         ohc_ds = ohc_ds["OHC_global_mean"].sel(ohc_depth=-1) * ohc_ds.attrs["ocean_area_m2"] / earth_SA_cam
         ohc_ds = ohc_ds - ohc_ds.isel(time=0)  # Convert OHC to anomaly
+
+        # Because OHC and iEEI normalized to a time period, add the ending value of the preceding case to the current case for continuity
+        if "preceding_case" in PLOT_CONFIGS[case_label] and PLOT_CONFIGS[case_label]["preceding_case"] is not None:
+            ohc_offset = case_end_ohc_ieei_offsets[PLOT_CONFIGS[case_label]["preceding_case"][0]][PLOT_CONFIGS[case_label]["preceding_case"][1]]["ohc_end"]
+            ieei_offset = case_end_ohc_ieei_offsets[PLOT_CONFIGS[case_label]["preceding_case"][0]][PLOT_CONFIGS[case_label]["preceding_case"][1]]["ieei_end"]
+            ohc_ds = ohc_ds + ohc_offset
         
         # Compute annual means
         asr_annual = weighted_annualmean(asr_ds)
@@ -1230,66 +1255,40 @@ if __name__ == "__main__":
         
         # Compute iEEI starting from start_year_2
         ieei_ds = compute_ieei_with_start_year(asr_ds, olr_ds, start_year_2)
+        if "preceding_case" in PLOT_CONFIGS[case_label] and PLOT_CONFIGS[case_label]["preceding_case"] is not None:
+            ieei_ds = ieei_ds + ieei_offset
         
         # Create annual and decadal means for iEEI by grouping years
         ieei_annual = weighted_annualmean(ieei_ds)
         ieei_decadal = compute_decadal2(ieei_ds)
 
-        # Handle ensemble dimension if present
-        n_ens = 1
-        if "ens" in asr_annual.dims:
-            n_ens = len(asr_annual["ens"])
-            # Plot individual ensemble members (thin, alpha=0.5)
-            for ens_member in asr_annual["ens"].values:
-                ax.plot(asr_annual["year"], asr_annual.sel(ens=ens_member), 
-                       color=sns.color_palette("colorblind", n_colors=6)[0], linestyle="-", linewidth=0.7, alpha=0.5)
-                ax.plot(olr_annual["year"], olr_annual.sel(ens=ens_member), 
-                       color=sns.color_palette("colorblind", n_colors=6)[1], linestyle="-", linewidth=0.7, alpha=0.5)
-                # This is not plotted to the correct axis, needs to be on the doubled one
-                ax.plot(eei_annual["year"], eei_annual.sel(ens=ens_member), 
-                       color=sns.color_palette("colorblind", n_colors=6)[2], linestyle="-", linewidth=1, alpha=0.75)
-            # Now convert to the ensemble mean for the next step
-            asr_decadal = asr_decadal.mean(dim="ens")
-            asr_annual = asr_annual.mean(dim="ens")
-            olr_decadal = olr_decadal.mean(dim="ens")
-            olr_annual = olr_annual.mean(dim="ens")
-            eei_decadal = eei_decadal.mean(dim="ens")
-            eei_annual = eei_annual.mean(dim="ens")
+        # Store the ending OHC and iEEI values for the current case
+        case_end_ohc_ieei_offsets[case_label] = {case_str: {
+            "ohc_end": ohc_annual.isel(year=-1).mean(dim="ens").values,
+            "ieei_end": ieei_annual.isel(year=-1).mean(dim="ens").values},
+                                                 }
 
         # Plot
         ax1, ax2, ax3 = plot_eei_timeseries(
             asr_annual, olr_annual, eei_annual, None,
             asr_decadal, olr_decadal, eei_decadal, None,
             ax=ax, fontsize=14, case_name=case_label,
-            colors=sns.color_palette("colorblind", n_colors=6),
+            colors=colors,
         )
 
         # Plot iEEI, TS, and OHC
         if ohc_annual is not None:
-            # Handle ensemble dimension for OHC
-            if "ens" in ohc_annual.dims:
-                for ens_member in ohc_annual["ens"].values:
-                    axb.plot(ohc_annual["year"], ohc_annual.sel(ens=ens_member), 
-                            color=sns.color_palette("colorblind", n_colors=6)[5], linestyle="-", linewidth=0.7, alpha=0.5)
-                # Convert to ensemble mean for the next step
-                ieei_annual = ieei_annual.mean(dim="ens")
-                ieei_decadal = ieei_decadal.mean(dim="ens")
-                ts_annual = ts_annual.mean(dim="ens")
-                ts_decadal = ts_decadal.mean(dim="ens")
-                ohc_annual = ohc_annual.mean(dim="ens")
-                ohc_decadal = ohc_decadal.mean(dim="ens")
-            
             axb, axb2 = plot_ieei_ts_ohc(
                 ieei_annual=ieei_annual, ieei_decadal=ieei_decadal,
                 ts_annual=ts_annual, ts_decadal=ts_decadal,
                 ohc_annual=ohc_annual, ohc_decadal=ohc_decadal,
-                ax=axb, colors=sns.color_palette("colorblind", n_colors=6)[3:], fontsize=14, time_dim="year",
+                ax=axb, colors=colors[3:], fontsize=14, time_dim="year",
             )
         else:
             axb, axb2 = plot_ieei_ts(
                 ieei_annual=ieei_annual, ieei_decadal=ieei_decadal,
                 ts_annual=ts_annual, ts_decadal=ts_decadal,
-                ax=axb, colors=sns.color_palette("colorblind", n_colors=6)[3:], fontsize=14, time_dim="year",
+                ax=axb, colors=colors[3:], fontsize=14, time_dim="year",
             )
 
         ax1.set_xlim(PLOT_CONFIGS[case_label]["xlims"])
@@ -1308,38 +1307,52 @@ if __name__ == "__main__":
         if "ax2_lims" in PLOT_CONFIGS[case_label]:
             ax2.set_ylim(*PLOT_CONFIGS[case_label]["ax2_lims"])
 
+        if "axb1_lims" in PLOT_CONFIGS[case_label]:
+            axb.set_ylim(*PLOT_CONFIGS[case_label]["axb1_lims"])
         if "axb2_lims" in PLOT_CONFIGS[case_label]:
             axb2.set_ylim(*PLOT_CONFIGS[case_label]["axb2_lims"])
 
         # Add ensemble count annotation
-        ax1.text(0.36, 0.98, f"N={n_ens}", fontsize=12, fontweight="bold", 
-                transform=ax1.transAxes, verticalalignment='top')
+        n_ens = 1
+        if "ens" in asr_annual.dims:
+            n_ens = len(asr_annual["ens"])
+        ax1.text(0.98, 0.98, f"N={n_ens}", fontsize=12, fontweight="bold", 
+                transform=ax1.transAxes, verticalalignment='top', horizontalalignment='right')
 
         # Add a horizontal line at y=0 for the EEI subplot
         ax2.axhline(0, color='grey', linestyle='--', linewidth=1)
+        ax.set_facecolor("whitesmoke")
+        axb.set_facecolor("whitesmoke")
 
         # Collect handles and labels from left column for combined legend
         if idx == 0:
             handles1, labels1 = ax1.get_legend_handles_labels()
             handles2, labels2 = ax2.get_legend_handles_labels()
-            top_handles.extend(handles1[2:] + handles2[1:])
+            top_handles.extend(handles1 + handles2)
             top_labels.extend(["ASR", "OLR", "EEI"])
             handles_b, labels_b = axb.get_legend_handles_labels()
             handles_b2, labels_b2 = axb2.get_legend_handles_labels()
-            bottom_handles.extend(handles_b[2:] + handles_b2[1:])
+            bottom_handles.extend(handles_b + handles_b2)
             bottom_labels.extend(["iEEI", "OHC", "Surface Temperature"])
+        # break
 
-    # Create a single legend for the left column
-    if top_handles and top_labels:
-        axes[0,0].legend(
-            top_handles, top_labels, loc='upper left', 
-            fontsize=12, framealpha=0.95,
-        )
-    if bottom_handles and bottom_labels:
-        axes[1,0].legend(
-            bottom_handles, bottom_labels, loc='upper left', 
-            fontsize=12, framealpha=0.95,
-        )
+    # # Create a single legend for the left column
+    # if top_handles and top_labels:
+    #     axes[0,0].legend(
+    #         top_handles, top_labels, loc='upper left', 
+    #         fontsize=12, framealpha=0.95,
+    #     )
+    # if bottom_handles and bottom_labels:
+    #     axes[1,0].legend(
+    #         bottom_handles, bottom_labels, loc='upper left', 
+    #         fontsize=12, framealpha=0.95,
+    #     )
+
+    # Create panel labels
+    panel_labels = [f"{chr(97 + i)}." for i in range(len(axes.flat))]
+    for i, (ax, label) in enumerate(zip(axes.flat, panel_labels)):
+        ax.text(0.02, 0.98, label, fontsize=14, fontweight="bold", 
+                transform=ax.transAxes, verticalalignment='top')
 
     # %%
     fig.savefig("figures/figure_timeseries_future.png", dpi=300, bbox_inches='tight')
