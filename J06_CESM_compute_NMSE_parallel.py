@@ -89,7 +89,14 @@ def compute_error_decomposition(
             test_da = test_da.assign_coords(
                 time=shift_noleap_time_back_one_month(test_da["time"].values)
             )
-        
+
+        # Remove any years that are incomplete (does not have 12 months of data)
+        year_counts = test_da["time"].groupby("time.year").count(dim="time")
+        complete_years = year_counts.year.where(year_counts == 12, drop=True)
+        test_da = test_da.where(
+            test_da["time.year"].isin(complete_years), drop=True
+        )
+
         test_da = time_fcn(test_da)  # Take annual mean to match the control dataset
         control_da = control_ds[test_var]
 
@@ -358,7 +365,7 @@ if __name__ == "__main__":
             "file_pattern": "*/atm/proc/tseries/month_1/b.e21.BW.f09_g17.SSP245*.cam.h0.*.nc",
         },
         "ARISE-1.0": {
-            "sources": ["/glade/work/jonahshaw/PRISM_data/ARISE-1.0/", f"{derivedpath_atm_root}/ARISE_SAI/"],
+            "sources": ["/glade/work/jonahshaw/PRISM_data/ARISE-1.0/", f"{derivedpath_atm_root}/ARISE-1.0/"],
             "file_pattern": "*/atm/proc/tseries/month_1/b.e21.BW.f09_g17.SSP245*.cam.h0.*.nc",
         },
         "CESM2_WACCM_SSP2-4.5": {
