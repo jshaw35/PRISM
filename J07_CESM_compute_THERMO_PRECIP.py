@@ -55,22 +55,22 @@ def compute_thermoprecip(
 def crawl_and_process2(input_dir, output_dir, process_fn, **fn_args):
     for root, _, files in os.walk(input_dir):
         rel_root = os.path.relpath(root, input_dir)
-        if output_dir is not None:
-            out_root = output_dir if rel_root == "." else os.path.join(output_dir, rel_root)
-            os.makedirs(out_root, exist_ok=True)
         for name in files:
+            # Only look for monthly files
+            if "h0" not in name:
+                continue
             src = os.path.join(root, name)
+            data, filename = process_fn(src, **fn_args)
+            # Fail gracefully
+            if data is None:
+                continue
             if output_dir is not None:
-                dst = os.path.join(out_root, name)
+                out_root = output_dir if rel_root == "." else os.path.join(output_dir, rel_root)
+                dst = os.path.join(out_root, filename)
                 if os.path.exists(dst):
                     logging.info(f"{dst} already exists")
                     continue
-            logging.info(f"Processing {src}")
-            data = process_fn(src, **fn_args)
-            if data is None:
-                logging.error(f"Failed to process {src}")
-                continue
-            if output_dir is not None:
+                os.makedirs(out_root, exist_ok=True)
                 logging.info(f"Writing {dst}")
                 data.to_netcdf(dst)
 
@@ -84,19 +84,20 @@ def compute_thermoprecip_wrapper(
     # Parse the variable name from the test path, assuming it is in the format of "case/atm/proc/tseries/month_1/case.cam.h0.VAR.nc"
     filename = os.path.splitext(os.path.basename(filepath))[0]
     name_parts = filename.split(".")
-    marker_idx = name_parts.index(var_detect_str)
+    # Skip if not a h0 file
+    try:
+        marker_idx = name_parts.index(var_detect_str)
+    except ValueError:
+        return None, None
     test_var = name_parts[marker_idx + 1]
     if test_var != match_var:
-        return 1
-    save_path = filepath.replace(match_var, "PRECIP_THERMO")
-    if os.path.exists(save_path):
-        logging.info(f"{save_path} already exists")
-        return 1
+        return None, None
+    save_filename = filename.replace(match_var, "PRECIP_THERMO") + ".nc"
 
     # Compute the precipitation proxy variable and add it to the list of variables to average
     precip_vars = ["FLNT", "FSNT", "FLNS", "FSNS", "SHFLX"]
     precip_vars_plus = precip_vars + ["gw"]
-    precip_files = [filepath.replace(match_str, _var) for _var in precip_vars]
+    precip_files = [filepath.replace(match_var, _var) for _var in precip_vars]
     for _file in precip_files:
         assert os.path.exists(_file), f"{_file} does not exist"
     try:
@@ -106,11 +107,9 @@ def compute_thermoprecip_wrapper(
     ds_merged = ds_merged[precip_vars_plus]
     precip_ds = compute_thermoprecip(ds_merged)
     precip_ds = xr.merge([precip_ds, ds_merged["gw"]])
-    logging.info(f"Writing: {save_path}")
-    os.path.dirname(save_path)
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    precip_ds.to_netcdf(save_path)
-    return 1
+
+    return precip_ds, save_filename
+
 
 def compute_toaimbalance_wrapper(
     filepath: str,
@@ -121,14 +120,16 @@ def compute_toaimbalance_wrapper(
     # Parse the variable name from the test path, assuming it is in the format of "case/atm/proc/tseries/month_1/case.cam.h0.VAR.nc"
     filename = os.path.splitext(os.path.basename(filepath))[0]
     name_parts = filename.split(".")
-    marker_idx = name_parts.index(var_detect_str)
+    # Skip if not a h0 file
+    try:
+        marker_idx = name_parts.index(var_detect_str)
+    except ValueError:
+        return None, None
     test_var = name_parts[marker_idx + 1]
     if test_var != match_var:
-        return 1
-    save_path = filepath.replace(match_var, "FNNT")
-    if os.path.exists(save_path):
-        logging.info(f"{save_path} already exists")
-        return 1
+        return None, None
+
+    save_filename = filename.replace(match_var, "FNNT") + ".nc"
 
     # Compute the precipitation proxy variable and add it to the list of variables to average
     toanet_vars = ["FLNT", "FSNT"]
@@ -146,47 +147,55 @@ def compute_toaimbalance_wrapper(
     toanet_ds.attrs["units"] = "W/m^-2"
     toanet_ds.name = "FNNT"
     toanet_ds = xr.merge([toanet_ds, ds_merged["gw"]])
-    logging.info(f"Writing: {save_path}")
-    os.path.dirname(save_path)
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    toanet_ds.to_netcdf(save_path)
-    return 1
+
+    return toanet_ds, save_filename
 
 
 # %%
 if __name__ == "__main__":
-    # If on CURC
-    rawdata_root = Path("/home/josh2250/kaydata/jshaw/RadInt_rawdata/")
+    machine = "glade"
+    if machine == "glade":
+        savepath_root = "/glade/work/jonahshaw/PRISM_data/derived_vars/"
     match_str = "FLNT"
-    # save_path = Path("/home/josh2250/projects/PRISM/data/control_baselines/")
 
-    case_list = [
-        "ARISE_SAI",
-        "CESM2_1850control",
-        "CESM2_LE",
-        "CESM2_LME",
-        "CESM2_SF",
-        "CESM2_WACCM_SSP2-4.5",
-        "CESM2_WACCM_SSP2-4.5_MCB",
-        "CESM_LME",
-        "CESM2_WACCM_1850control",
-        "CESM2_WACCM_HIST",
-    ]
+    case_dict = {
+        "ARISE-1.0": ["/glade/work/jonahshaw/PRISM_data/ARISE-1.0/"],
+        "ARISE_SAI": ["/gdex/data/d651059/ARISE-SAI-1.5"],
+        "CESM2_LME": ["/gdex/data/d651078"],
+        "CESM2_WACCM_SSP2-4.5": ["/gdex/data/d651045/CESM2-WACCM-SSP245"],
+        "CESM2_WACCM_SSP2-4.5_MCB": ["/gdex/data/d314006"],
+        "CESM2_WACCM_1850control": ["/glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/", ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"]],
+        "CESM2_WACCM_HIST": ["/glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/", ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001", "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.002", "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.003"]],
+        # "CESM2_1850control": "/glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/b.e21.B1850.f09_g17.CMIP6-piControl.001",
+        # "CESM2_LE": "/gdex/data/d651056/CESM2-LE",
+        # "CESM2_SF": "/gdex/data/d651055/CESM2-SF",
+        # "CESM_LME": "/gdex/data/d651058/CESM-CAM5-LME",
+    }
 
-    for case in case_list:
-        crawl_and_process2(
-            input_dir=rawdata_root / case,
-            output_dir=None,
-            process_fn=compute_thermoprecip_wrapper,
-            match_var=match_str,
-        )
+    for case in case_dict:
+        load_paths = case_dict.get(case, [])
+        if len(load_paths) == 1:
+            load_path_list = [load_paths[0]]
+            save_path_list = [case]
+        elif len(load_paths) == 2:
+            load_path_list = [load_paths[0] + subcase for subcase in load_paths[1]]
+            save_path_list = [case + "/" + subcase for subcase in load_paths[1]]
 
-        crawl_and_process2(
-            input_dir=rawdata_root / case,
-            output_dir=None,
-            process_fn=compute_toaimbalance_wrapper,
-            match_var=match_str,
-        )
+        for load_path, save_path in zip(load_path_list, save_path_list):
+            logging.info(f"Processing case: {load_path}")
+            crawl_and_process2(
+                input_dir=load_path,
+                output_dir=f"{savepath_root}/{save_path}",
+                process_fn=compute_thermoprecip_wrapper,
+                match_var=match_str,
+            )
+
+            crawl_and_process2(
+                input_dir=load_path,
+                output_dir=f"{savepath_root}/{save_path}",
+                process_fn=compute_toaimbalance_wrapper,
+                match_var=match_str,
+            )
 
     # %%
     # Testing code

@@ -140,56 +140,63 @@ def crawl_and_list_glob(input_dir, file_string):
 # %%
 
 if __name__ == "__main__":
+    data_root = "/glade/work/jonahshaw/PRISM_data/spatial_averages_data/"
     CASE_CONFIGS = {
-        "CESM-LME": {
-            "path": "data/RadInt_procdata/CESM_LME/",
-            "case_str": "BLMTRC5CN.f19_g16.003",
-            "append_case": None,
-            "ufunc": lambda ds: ds.sel(time=slice(None, "1849-12-31")),
-            # "ufunc": None,
-        },
+        # "CESM-LME": {
+        #     "path": "data/RadInt_procdata/CESM_LME/",
+        #     "case_str": "BLMTRC5CN.f19_g16.003",
+        #     "append_case": None,
+        #     "ufunc": lambda ds: ds.sel(time=slice(None, "1849-12-31")),
+        #     # "ufunc": None,
+        # },
         "CESM2-LME": {
-            "path": "data/RadInt_procdata/CESM2_LME/",
+            "path": f"{data_root}/CESM2_LME/",
             "case_str": "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002",
             "append_case": None,
             "ufunc": None,
         },
         "CESM2_WACCM_1850control" :{
-            "path": "data/RadInt_procdata/CESM2_WACCM_1850control/",
+            "path": f"{data_root}/CESM2_WACCM_1850control/",
             "case_str": "b.e21.BW1850.f09_g17.CMIP6-piControl.001",
             "append_case": None,
             "ufunc": None,
         },
         "CESM2-WACCM-HIST": {
-            "path": "data/RadInt_procdata/CESM2_WACCM_HIST/",
+            "path": f"{data_root}/CESM2_WACCM_HIST/",
             "case_str": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001",
             "append_case": None,
             "ufunc": None,
         },
         "CESM2-SSP2-4.5": {
-            "path": "data/RadInt_procdata/CESM2_WACCM_SSP2-4.5/",
+            "path": f"{data_root}/CESM2_WACCM_SSP2-4.5/",
             "case_str": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.001",
             "append_case": "CESM2-WACCM-HIST",
             "ufunc": None,
         },
         "ARISE-SAI": {
-            "path": "data/RadInt_procdata/ARISE_SAI/",
+            "path": f"{data_root}/ARISE_SAI/",
             "case_str": "1p5K-SAI.001",
             "append_case": "CESM2-SSP2-4.5",
             "ufunc": None,
         },
         "ARISE-SAI_extended": {
-            "path": "data/RadInt_procdata/ARISE_SAI/",
+            "path": f"{data_root}/ARISE_SAI/",
             "case_str": "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.001",
             "append_case": "ARISE-SAI",
             "ufunc": None,
         },
         "CESM2-SSP2-4.5_MCB": {
-            "path": "data/RadInt_procdata/CESM2_WACCM_SSP2-4.5_MCB/",
+            "path": f"{data_root}/CESM2_WACCM_SSP2-4.5_MCB/",
             "case_str": "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.001",
             "append_case": "CESM2-SSP2-4.5",
             "ufunc": None,
         },
+        "ARISE-1.0": {
+            "path": f"{data_root}/ARISE-1.0/",
+            "case_str": "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.001",
+            "append_case": "CESM2-SSP2-4.5",
+            "ufunc": None,
+        }
         # Add new cases here when ready
     }
     asr_var = "FSNT"
@@ -235,52 +242,62 @@ if __name__ == "__main__":
         data_dict[case_label] = all_ds
 
     # %%
+    lowlim_control = 236
+    highlim_control = 244
+    lowlim_ssp245 = 235
+    highlim_ssp245 = 245
     PLOT_CONFIGS = {
-        "CESM-LME": {
-            "ylims": (230, 237),
-            "xlims": (230, 237),
-            "cbar_ticks": np.arange(850, 1851, 100),
-            "cbar_ylabel": None,
-        },
+        # "CESM-LME": {
+        #     "ylims": (230, 237),
+        #     "xlims": (230, 237),
+        #     "cbar_ticks": np.arange(850, 1851, 100),
+        #     "cbar_ylabel": None,
+        # },
         "CESM2-LME": {
-            "ylims": (236, 244),
-            "xlims": (236, 244),
+            "ylims": (lowlim_control, highlim_control),
+            "xlims": (lowlim_control, highlim_control),
             "cbar_ticks": np.arange(850, 1851, 100),
             "cbar_ylabel": None,
         },
         "CESM2_WACCM_1850control" :{
-            "ylims": (236, 244),
-            "xlims": (236, 244),
+            "ylims": (lowlim_control, highlim_control),
+            "xlims": (lowlim_control, highlim_control),
             "cbar_ticks": np.arange(0, 501, 50),
             "cbar_ylabel": None,
         },
         "CESM2-WACCM-HIST": {
-            "ylims": (230, 237),
-            "xlims": (230, 237),
+            "ylims": (lowlim_ssp245, highlim_ssp245),
+            "xlims": (lowlim_ssp245, highlim_ssp245),
             "cbar_ticks": np.arange(1850, 2016, 10),
             "cbar_ylabel": None,
         },
         "CESM2-SSP2-4.5": {
-            "ylims": (236, 245),
-            "xlims": (236, 245),
+            "ylims": (lowlim_ssp245, highlim_ssp245),
+            "xlims": (lowlim_ssp245, highlim_ssp245),
             "cbar_ticks": np.arange(1850, 2101, 10),
             "cbar_ylabel": None,
         },
         "ARISE-SAI": {
-            "ylims": (236, 245),
-            "xlims": (236, 245),
+            "ylims": (lowlim_ssp245, highlim_ssp245),
+            "xlims": (lowlim_ssp245, highlim_ssp245),
             "cbar_ticks": np.arange(1850, 2086, 10),
             "cbar_ylabel": None,
         },
         "ARISE-SAI_extended": {
-            "ylims": (236, 245),
-            "xlims": (236, 245),
+            "ylims": (lowlim_ssp245, highlim_ssp245),
+            "xlims": (lowlim_ssp245, highlim_ssp245),
             "cbar_ticks": np.arange(1850, 2101, 10),
             "cbar_ylabel": None,
         },
         "CESM2-SSP2-4.5_MCB": {
-            "ylims": (236, 245),
-            "xlims": (236, 245),
+            "ylims": (lowlim_ssp245, highlim_ssp245),
+            "xlims": (lowlim_ssp245, highlim_ssp245),
+            "cbar_ticks": np.arange(1850, 2101, 10),
+            "cbar_ylabel": None,
+        },
+        "ARISE-1.0": {
+            "ylims": (lowlim_ssp245, highlim_ssp245),
+            "xlims": (lowlim_ssp245, highlim_ssp245),
             "cbar_ticks": np.arange(1850, 2101, 10),
             "cbar_ylabel": None,
         },
@@ -371,26 +388,28 @@ if __name__ == "__main__":
             zorder=0,
         )
 
+    # %%
     fig.savefig("figures/figure1b_toprow.png", dpi=300, bbox_inches='tight')
     logging.info("Saved figure1b_toprow.png")
     plt.close(fig)
 
     # %%
     # Plot the CESM LME, SSP2-4.5, and ARISE-SAI data annually and decadally for the global mean in a 1x3 subplot grid
-    fig,axs = plt.subplots(1,3, figsize=(16,4.5))
+    # fig,axs = plt.subplots(1,3, figsize=(16,4.5))
+    fig,axs = plt.subplots(1,4, figsize=(20,4.5))
     fig.subplots_adjust(wspace=0.35)
     # caxes = [fig.add_axes([0.33, 0.15, 0.01, 0.7]), fig.add_axes([0.62, 0.15, 0.01, 0.7]), fig.add_axes([0.905, 0.15, 0.01, 0.7])] # create separate colorbar axes for each subplot
-    # case_list = ["CESM2-SSP2-4.5", "ARISE-SAI", "CESM2-SSP2-4.5_MCB"]
-    case_list = ["CESM2-SSP2-4.5", "ARISE-SAI_extended", "CESM2-SSP2-4.5_MCB"]
+    case_list = ["CESM2-SSP2-4.5", "ARISE-SAI_extended", "CESM2-SSP2-4.5_MCB", "ARISE-1.0"]
 
     cax = fig.add_axes([0.92, 0.15, 0.01, 0.7]) # create separate colorbar axes for each subplot
     outs_list = []
-    caxes = [cax, cax, cax]
+    caxes = [cax, cax, cax, cax]
     add_colorbar = {
         "CESM2-SSP2-4.5": True,
         "ARISE-SAI_extended": False,
         # "ARISE-SAI": False,
         "CESM2-SSP2-4.5_MCB": False,
+        "ARISE-1.0": False,
     }
     cmap = sns.color_palette("viridis", as_cmap=True)
 
