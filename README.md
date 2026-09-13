@@ -3,6 +3,10 @@ A radiative perspective on climate intervention safety (ARPOCIS/PRISM)
 
 **2026/09/13**
 Started to consolidate commonly used functions to avoid inconsistent practices
+Also starting to update J08_CESM_bias_decomposition. Files are now loading, but need to think about the figure format with the additional data complexity.
+- Currently the time series of the NMSE show the departure from piControl conditions, did we want to compare with the pre-geoengineering period instead?
+- Each experiment has multiple realizations, which would make showing the departure from "precedent" messy. Do we instead show the mean value and scatter over the period 2060 - 2069 relative to whatever our control(s) are? So each panel could be a different variable, where the x-axis indexes over the ~12 experiments, and the y-axis shows both the null hypothesis range and the results from individual members and the ensemble mean. (use similar graphics with dot size, alpha, etc from the ASR-OLR plots)
+- But this would hide the delta-function forcing of the MCB experiments (but we could leave this in the supplement and a future paper)
 
 **2026/09/10**
 Reworked time series figure with all CESM2 experiments is fully drafted in J04_CESM_EEI_timeseries_multiensemble.py.

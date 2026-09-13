@@ -8,303 +8,24 @@ Essentially, this breaks the error into a components from mean shifts and from s
 """
 # %%
 from pathlib import Path
+
 import os
 import xarray as xr
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib as mpl
-import seaborn as sns
 import pandas as pd
-from matplotlib.ticker import MultipleLocator
-
 import logging
+
+from J15_shared_functions import (
+    shift_noleap_time_back_one_month,
+    load_ensemble_cases,
+    match_wildcard_case,
+    load_data_with_configs,
+)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
 # %%
-
-def shift_noleap_time_back_one_month(time_values):
-    t = np.asarray(time_values)
-    n = t.size
-
-    years = np.fromiter((v.year for v in t), dtype=np.int32, count=n)
-    months = np.fromiter((v.month for v in t), dtype=np.int16, count=n)
-    days = np.fromiter((v.day for v in t), dtype=np.int16, count=n)
-    hours = np.fromiter((v.hour for v in t), dtype=np.int16, count=n)
-    minutes = np.fromiter((v.minute for v in t), dtype=np.int16, count=n)
-    seconds = np.fromiter((v.second for v in t), dtype=np.int16, count=n)
-    microseconds = np.fromiter((v.microsecond for v in t), dtype=np.int32, count=n)
-
-    months = months - 1
-    jan_mask = months == 0
-    months[jan_mask] = 12
-    years[jan_mask] = years[jan_mask] - 1
-
-    days_in_month = np.array([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31], dtype=np.int16)
-    days = np.minimum(days, days_in_month[months - 1])
-
-    dt_type = type(t[0])
-    return np.array(
-        [
-            dt_type(int(y), int(m), int(d), int(h), int(mi), int(s), int(us))
-            for y, m, d, h, mi, s, us in zip(years, months, days, hours, minutes, seconds, microseconds)
-        ],
-        dtype=object,
-    )
-
-
-def get_weights_by_month(
-    time_ds,
-    account_for_leap: bool = False,
-):
-
-    days_per_month = np.array([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
-    days_per_month_leap = np.array([31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
-    seconds_per_month = 60 * 60 * 24 * days_per_month
-    seconds_per_month_leap = 60 * 60 * 24 * days_per_month_leap
-
-    weights = xr.DataArray(
-        data=seconds_per_month,
-        dims=["month"],
-        coords={
-            "month": np.arange(1,13),
-        }
-    )
-    weights_leap = xr.DataArray(
-        data=seconds_per_month_leap,
-        dims=["month"],
-        coords={
-            "month": np.arange(1,13),
-        }
-    )
-
-    time_weights = []
-    if account_for_leap == False:
-        for _t in time_ds:
-            time_weights.append(weights.sel(month=_t['time.month']))
-    else:
-        for _t in time_ds:
-            if _t["time.year"] % 4 == 0:
-                time_weights.append(weights_leap.sel(month=_t['time.month']))
-            else:
-                time_weights.append(weights.sel(month=_t['time.month']))
-
-    # Duplicate the time dimension but with weights as values
-    weights_ds = xr.DataArray(
-        data=time_weights,
-        dims="time",
-        coords={
-            "time":time_ds,
-        },
-    )
-    return weights_ds
-
-
-def crawl_and_list(input_dir, file_string):
-    file_list = []
-    for root, _, files in os.walk(input_dir):
-        for name in files:
-            if file_string in name:
-                file_list.append(os.path.join(root, name))
-    return file_list
-
-
-def crawl_and_list_glob(input_dir, file_string):
-    filelist = list(Path(input_dir).glob(f"**/{file_string}"))
-    return [str(file) for file in filelist]
-
-
-def compute_decadal(
-    ds,
-    center=True,
-):
-    ds_decadal = ds.resample(time='10YE', offset=pd.Timedelta(weeks=-52)).mean().groupby("time.year").mean()
-    if center:
-        ds_decadal["year"] = ds_decadal["year"] - 5
-    return ds_decadal
-
-
-def compute_decadal2(
-    ds,
-    center=True,
-):
-    if "time" in ds.coords:
-        ds_decadal = ds.rolling(time=120, min_periods=120, center=True).mean(dim="time").sel(time=ds["time"][::12])
-    elif "year" in ds.coords:
-        ds_decadal = ds.rolling(year=10, min_periods=10, center=True).mean(dim="year")
-    return ds_decadal
-
-
-def extract_ensemble_numbers(filenames):
-    """
-    Extract ensemble numbers from CESM filenames.
-    
-    Ensemble numbers are 3-digit numeric strings bounded by periods (e.g., ".001.").
-    This function parses each filename to identify the ensemble member.
-    
-    Args:
-        filenames (List[str]): List of file paths
-    
-    Returns:
-        Dict[str, List[str]]: Dictionary mapping ensemble number strings to lists of files.
-                             Keys are ensemble numbers (e.g., "001", "002", "101").
-                             Values are lists of file paths containing that ensemble number.
-    """
-    ens_dict = {}
-    
-    for filepath in filenames:
-        # Extract just the filename from the path
-        filename = os.path.basename(filepath)
-        
-        # Split by period to find 3-digit numeric strings
-        parts = filename.split(".")
-        ens_number = None
-        
-        for part in parts:
-            if len(part) == 3 and part.isdigit():
-                ens_number = part
-                break
-        
-        if ens_number is not None:
-            if ens_number not in ens_dict:
-                ens_dict[ens_number] = []
-            ens_dict[ens_number].append(filepath)
-        else:
-            logging.warning(f"Could not extract ensemble number from filename: {filename}")
-    
-    return ens_dict
-
-
-def get_ensemble_number_from_case_str(case_str):
-    """
-    Extract ensemble number from a case string (e.g., "b.e21.BHISTcmip6.f09_g17.LE2-1301.001" -> "001").
-    
-    Args:
-        case_str (str): Case string identifier
-    
-    Returns:
-        str: Ensemble number if found (3-digit numeric string), None otherwise
-    """
-    parts = case_str.split(".")
-    for part in parts:
-        if len(part) == 3 and part.isdigit():
-            return part
-    return None
-
-
-def match_wildcard_case(pattern, case_list):
-    """
-    Find all cases in case_list that match the wildcard pattern.
-    
-    Simple wildcard matching: * matches any sequence of characters, ? matches single character.
-    
-    Args:
-        pattern (str): Pattern string with optional * or ? wildcards (e.g., "case.name.*")
-        case_list (List[str]): List of case strings to search
-    
-    Returns:
-        List[str]: List of matching case strings from case_list
-    """
-    import fnmatch
-    matches = [case for case in case_list if fnmatch.fnmatch(case, pattern)]
-    return matches
-
-
-def load_ensemble_cases(datapath_subdir, case_str, varlist):
-    """
-    Load case data with support for wildcard patterns matching multiple ensemble members.
-    
-    If case_str contains wildcards (* or ?):
-    - Finds all matching files
-    - Groups files by ensemble member (identified by 3-digit numeric strings in filenames)
-    - Loads each ensemble separately to avoid conflicts
-    - Adds 'ens' coordinate to track ensemble membership
-    - Concatenates along new 'ens' dimension
-    
-    If case_str contains no wildcards:
-    - Uses original behavior: finds all files matching the exact pattern
-    - Returns single dataset as before
-    
-    Args:
-        datapath_subdir (str): Path to subdirectory containing case files
-        case_str (str): Case string, may contain wildcards (* or ?)
-        varlist (List[str]): List of variable names to search for
-    
-    Returns:
-        xarray.Dataset: Loaded dataset. If wildcards were used, includes new 'ens' dimension.
-                       Returns None if no files are found.
-    """
-    has_wildcard = "*" in case_str or "?" in case_str
-    
-    if not has_wildcard:
-        # Original behavior: no wildcards, use standard file finding
-        all_files = []
-        for var in varlist:
-            var_files = crawl_and_list_glob(datapath_subdir, f"**/*{case_str}*.{var}.*nc")
-            all_files.extend(var_files)
-        
-        if len(all_files) == 0:
-            return None
-        
-        all_ds = xr.open_mfdataset(all_files)
-        return all_ds
-    
-    else:
-        # Wildcard case: find matching files, group by ensemble, load separately
-        all_files = []
-        for var in varlist:
-            # Use case_str directly in glob pattern (it contains wildcards)
-            var_files = crawl_and_list_glob(datapath_subdir, f"**/*{case_str}*.{var}.*nc")
-            all_files.extend(var_files)
-        
-        if len(all_files) == 0:
-            logging.warning(f"No files found matching pattern: **/*{case_str}*.*.nc")
-            return None
-        
-        # Extract ensemble numbers and group files
-        ens_dict = extract_ensemble_numbers(all_files)
-        
-        if len(ens_dict) == 0:
-            logging.warning(f"No ensemble numbers could be extracted from matching files for pattern: {case_str}")
-            return None
-        
-        # Sort ensemble numbers for consistent ordering
-        sorted_ens_numbers = sorted(ens_dict.keys())
-        
-        # Load each ensemble member separately
-        ensemble_datasets = []
-        for ens_number in sorted_ens_numbers:
-            ens_files = ens_dict[ens_number]
-            
-            try:
-                # Load this ensemble's files with flexible coordinate handling
-                ens_ds = xr.open_mfdataset(
-                    ens_files,
-                    combine='by_coords',
-                    compat='no_conflicts'
-                )
-                
-                # Add ensemble number as a data variable first, then expand to dimension
-                ens_ds = ens_ds.assign_coords(ens=ens_number)
-                # Expand the ens coordinate to a new dimension by wrapping in a new dimension
-                ens_ds = ens_ds.expand_dims({'ens': [ens_number]})
-                ensemble_datasets.append(ens_ds)
-                
-                logging.info(f"Loaded ensemble {ens_number} with {len(ens_files)} files")
-            
-            except Exception as e:
-                logging.error(f"Error loading ensemble {ens_number}: {e}")
-                continue
-        
-        if len(ensemble_datasets) == 0:
-            logging.warning(f"No ensemble members could be loaded for pattern: {case_str}")
-            return None
-        
-        # Concatenate all ensembles along the 'ens' dimension
-        combined_ds = xr.concat(ensemble_datasets, dim='ens')
-        
-        return combined_ds
-
 
 def plot_error_comparison(
     data_dict,
@@ -411,95 +132,196 @@ def plot_error_comparison(
 # %%
 
 if __name__ == "__main__":
-    root_dir = "/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/"
-    CASE_CONFIGS = {
-        "CESM2-LME_control": {
-            "path": root_dir + "data/error_relativetobaseline/CESM2_LME_control/",
-            "subdirs": ["CESM2_LME"],
-            "subdir_cases": {"CESM2_LME": ["b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008", "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002"]},
+    data_root = "/glade/work/jonahshaw/PRISM_data/error_relativetobaseline_atm/CESM2_WACCM_1850control_0100_0499/"
+    CASE_CONFIGS_ATM = {
+        "CESM2_WACCM_1850control" :{
+            "path": f"{data_root}/CESM2_WACCM_1850control/",
+            "subdir_cases": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"],
             "append_cases": {
-                "b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008": None,
-                "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002": None,
+                "b.e21.BW1850.f09_g17.CMIP6-piControl.001": None,
             },
             "ufunc": None,
         },
-        "CESM2_WACCM_1850control": {
-            "path": root_dir + "data/error_relativetobaseline/CESM2_WACCM_1850control/",
-            "subdirs": ["CESM2_WACCM_1850control", "CESM2_WACCM_HIST", "CESM2_WACCM_SSP2-4.5", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5_MCB"],
-            "subdir_cases": {
-                "CESM2_WACCM_1850control": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"],
-                "CESM2_WACCM_HIST": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?"],
-                "CESM2_WACCM_SSP2-4.5": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?"],
-                "ARISE_SAI": ["1p5K-SAI.00?", "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?", "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?"],
-                "CESM2_WACCM_SSP2-4.5_MCB": ["b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?"],
-            },
+        "CESM2-WACCM-HIST": {
+            "path": f"{data_root}/CESM2_WACCM_HIST/",
+            "subdir_cases": [
+                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??",
+            ],
             "append_cases": {
-                "b.e21.BW1850.f09_g17.CMIP6-piControl.001": None,
-                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?": None,
-                "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?": None,
-                "1p5K-SAI.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?": "1p5K-SAI.00?",
-                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?",
+                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??": None,
             },
             "ufunc": None,
         },
-        "CESM2(WACCM)_1850_1864": {
-            "path": root_dir + "data/error_relativetobaseline/CESM2_WACCM_HIST_1850_1864/",
-            "subdirs": ["CESM2_WACCM_1850control", "CESM2_WACCM_HIST", "CESM2_WACCM_SSP2-4.5", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5_MCB"],
-            "subdir_cases": {
-                "CESM2_WACCM_1850control": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"],
-                "CESM2_WACCM_HIST": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?"],
-                "CESM2_WACCM_SSP2-4.5": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?"],
-                "ARISE_SAI": ["1p5K-SAI.00?", "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?", "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?"],
-                "CESM2_WACCM_SSP2-4.5_MCB": ["b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?"],
-            },
+        "CESM2_WACCM_SSP2-4.5": {
+             "path": f"{data_root}/CESM2_WACCM_SSP2-4.5/",
+             "subdir_cases": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??"],
+             "append_cases": {
+                 "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??": None,
+             },
+             "ufunc": None,
+        },
+        "ARISE-SAI": {
+            "path": f"{data_root}/ARISE_SAI/",
+            "subdir_cases": [
+                "1p5K-SAI.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??",
+            ],
             "append_cases": {
-                "b.e21.BW1850.f09_g17.CMIP6-piControl.001": None,
-                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?": None,
-                "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?": None,
-                "1p5K-SAI.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?": "1p5K-SAI.00?",
-                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?",
+                "1p5K-SAI.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??": "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??",
+                # "1p5K-SAI.0??": None,
+                # "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??": None,
+                # "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??": None,
             },
             "ufunc": None,
         },
-        "CESM2(WACCM)_2000_2014": {
-            "path": root_dir + "data/error_relativetobaseline/CESM2_WACCM_HIST_2000_2014/",
-            "subdirs": ["CESM2_WACCM_1850control", "CESM2_WACCM_HIST", "CESM2_WACCM_SSP2-4.5", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5_MCB"],
-            "subdir_cases": {
-                "CESM2_WACCM_1850control": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"],
-                "CESM2_WACCM_HIST": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?"],
-                "CESM2_WACCM_SSP2-4.5": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?"],
-                "ARISE_SAI": ["1p5K-SAI.00?", "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?", "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?"],
-                "CESM2_WACCM_SSP2-4.5_MCB": ["b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?"],
-            },
+        "ARISE-1.0": {
+            "path": f"{data_root}/ARISE-1.0/",
+            "subdir_cases": [
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??",
+            ],
             "append_cases": {
-                "b.e21.BW1850.f09_g17.CMIP6-piControl.001": None,
-                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?": None,
-                "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?": None,
-                "1p5K-SAI.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.00?": "1p5K-SAI.00?",
-                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                # "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??": None,
+                # "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??": None,
+            },
+            "ufunc": None,
+        },
+        "CESM2_WACCM_SSP2-4.5_MCB": {
+            "path": f"{data_root}/CESM2_WACCM_SSP2-4.5_MCB/",
+            "subdir_cases": [
+                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000",
+            ],
+            "append_cases": {
+                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+                # "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??": None,
+                # "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": None,
+                # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": None,
+                # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": None,
+                # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000": None,
+                # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000": None,
             },
             "ufunc": None,
         },
     }
 
     # %%
+    # Load the data using the generalized loading function
+    # data_varlist = ['FLNT', 'FSNT', 'TS']
+    data_varlist = ['CLDTOT', 'FLNR', 'FLNS', 'FLNSC', 'FLNT', 'FLNTC', 'FLNTCLR', 'FLUT', 'FSNR', 'FSNS', 'FSNSC', 'FSNT', 'FSNTC', 'FSNTOA', 'FSNTOAC', 'LHFLX', 'SHFLX', 'TS', "PRECT", "PRECC", "PRECL", "PRECIP_THERMO", "FNNT"]
+    year_dim = "year"
+    ohc_varlist = ["OHC", "OHC_global_mean"]
+
+    # Load data lazily using the generalized function
+    data_dict = {}
+    for var in data_varlist:
+        data_dict[var] = load_data_with_configs(CASE_CONFIGS_ATM, [var], year_dim=year_dim, load_into_memory=False)
+
+    # %%
+    # root_dir = "/glade/u/home/jonahshaw/Scripts/git_repos/PRISM/"
+    # CASE_CONFIGS = {
+    #     "CESM2-LME_control": {
+    #         "path": root_dir / "CESM2_LME_control/",
+    #         "subdirs": ["CESM2_LME"],
+    #         "subdir_cases": {"CESM2_LME": ["b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008", "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002"]},
+    #         "append_cases": {
+    #             "b.e21.BWma1850.f19_g17.PMIP4-PaleoStrat.850CEcontrol.008": None,
+    #             "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.002": None,
+    #         },
+    #         "ufunc": None,
+    #     },
+    #     "CESM2_WACCM_1850control": {
+    #         "path": root_dir / "CESM2_WACCM_1850control/",
+    #         "subdirs": ["CESM2_WACCM_1850control", "CESM2_WACCM_HIST", "CESM2_WACCM_SSP2-4.5", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5_MCB"],
+    #         "subdir_cases": {
+    #             "CESM2_WACCM_1850control": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"],
+    #             "CESM2_WACCM_HIST": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??"],
+    #             "CESM2_WACCM_SSP2-4.5": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??"],
+    #             "ARISE_SAI": ["1p5K-SAI.0??", "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??", "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??"],
+    #             "CESM2_WACCM_SSP2-4.5_MCB": ["b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??"],
+    #         },
+    #         "append_cases": {
+    #             "b.e21.BW1850.f09_g17.CMIP6-piControl.001": None,
+    #             "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??": None,
+    #             "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??": None,
+    #             "1p5K-SAI.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+    #             "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+    #             "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??": "1p5K-SAI.0??",
+    #             "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+    #         },
+    #         "ufunc": None,
+    #     },
+    #     "CESM2(WACCM)_1850_1864": {
+    #         "path": root_dir / "CESM2_WACCM_HIST_1850_1864/",
+    #         "subdirs": ["CESM2_WACCM_1850control", "CESM2_WACCM_HIST", "CESM2_WACCM_SSP2-4.5", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5_MCB"],
+    #         "subdir_cases": {
+    #             "CESM2_WACCM_1850control": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"],
+    #             "CESM2_WACCM_HIST": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??"],
+    #             "CESM2_WACCM_SSP2-4.5": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??"],
+    #             "ARISE_SAI": ["1p5K-SAI.0??", "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??", "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??"],
+    #             "CESM2_WACCM_SSP2-4.5_MCB": ["b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??"],
+    #         },
+    #         "append_cases": {
+    #             "b.e21.BW1850.f09_g17.CMIP6-piControl.001": None,
+    #             "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??": None,
+    #             "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??": None,
+    #             "1p5K-SAI.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+    #             "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+    #             "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??": "1p5K-SAI.0??",
+    #             "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+    #         },
+    #         "ufunc": None,
+    #     },
+    #     "CESM2(WACCM)_2000_2014": {
+    #         "path": root_dir / "CESM2_WACCM_HIST_2000_2014/",
+    #         "subdirs": ["CESM2_WACCM_1850control", "CESM2_WACCM_HIST", "CESM2_WACCM_SSP2-4.5", "ARISE_SAI", "CESM2_WACCM_SSP2-4.5_MCB"],
+    #         "subdir_cases": {
+    #             "CESM2_WACCM_1850control": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"],
+    #             "CESM2_WACCM_HIST": ["b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??"],
+    #             "CESM2_WACCM_SSP2-4.5": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??"],
+    #             "ARISE_SAI": ["1p5K-SAI.0??", "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??", "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??"],
+    #             "CESM2_WACCM_SSP2-4.5_MCB": ["b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??"],
+    #         },
+    #         "append_cases": {
+    #             "b.e21.BW1850.f09_g17.CMIP6-piControl.001": None,
+    #             "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??": None,
+    #             "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??": None,
+    #             "1p5K-SAI.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+    #             "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+    #             "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??": "1p5K-SAI.0??",
+    #             "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+    #         },
+    #         "ufunc": None,
+    #     },
+    # }
+
+    # %%
     # Load the data in a nested dictionary structure. The top level keys are the control case labels (e.g. "CESM2-LME", what is being used as the baseline for the error calculation). The second level keys are the simulations that are being tested against, and the third level keys are the specific case strings that are being used to identify the files for each simulation.
     data_dict = {}
-    varlist = ['CLDTOT', 'FLNR', 'FLNS', 'FLNSC', 'FLNT', 'FLNTC', 'FLNTCLR', 'FLUT', 'FSNR', 'FSNS', 'FSNSC', 'FSNT', 'FSNTC', 'FSNTOA', 'FSNTOAC', 'LHFLX', 'SHFLX', 'TS', "PRECT", "PRECC", "PRECL", "PRECIP_THERMO"]
+    varlist = ['CLDTOT', 'FLNR', 'FLNS', 'FLNSC', 'FLNT', 'FLNTC', 'FLNTCLR', 'FLUT', 'FSNR', 'FSNS', 'FSNSC', 'FSNT', 'FSNTC', 'FSNTOA', 'FSNTOAC', 'LHFLX', 'SHFLX', 'TS', "PRECT", "PRECC", "PRECL", "PRECIP_THERMO", "FNNT"]
+    LOAD_CONFIGS = CASE_CONFIGS_ATM
     year_dim = "year"
-    for case_label in CASE_CONFIGS.keys():
-        datapath = CASE_CONFIGS[case_label]["path"]
+    for case_label in LOAD_CONFIGS.keys():
+        datapath = LOAD_CONFIGS[case_label]["path"]
         case_dict = {}
-        for subdir in CASE_CONFIGS[case_label]["subdir_cases"]:
+        for subdir in LOAD_CONFIGS[case_label]["subdir_cases"]:
             subcase_dict = {}
             datapath_subdir = os.path.join(datapath, subdir)
-            for case_str in CASE_CONFIGS[case_label]["subdir_cases"][subdir]:
+            for case_str in LOAD_CONFIGS[case_label]["subdir_cases"][subdir]:
 
                 # Load case data, supporting wildcards for ensemble members
                 all_ds = load_ensemble_cases(datapath_subdir, case_str, varlist)
@@ -516,8 +338,8 @@ if __name__ == "__main__":
 
                 # If there is an append case specified, append the data from that case to the current dataset along the time dimension
                 # e.g. for ARISE-SAI, we want to append the CESM2-SSP2-4.5 data it is branched from. We will assume that the append case has already been loaded and is available in data_dict.
-                if CASE_CONFIGS[case_label]["append_cases"][case_str] is not None:
-                    append_case_label = CASE_CONFIGS[case_label]["append_cases"][case_str]
+                if LOAD_CONFIGS[case_label]["append_cases"][case_str] is not None:
+                    append_case_label = LOAD_CONFIGS[case_label]["append_cases"][case_str]
                     
                     # Get the subdir for the append case, which may be different from the current subdir.
                     # Handle both explicit case strings and wildcard patterns
@@ -526,7 +348,7 @@ if __name__ == "__main__":
                     
                     has_wildcard = "*" in append_case_label or "?" in append_case_label
                     
-                    for subdir_key, case_list in CASE_CONFIGS[case_label]["subdir_cases"].items():
+                    for subdir_key, case_list in LOAD_CONFIGS[case_label]["subdir_cases"].items():
                         if has_wildcard:
                             # Try wildcard matching
                             matches = match_wildcard_case(append_case_label, case_list)
@@ -602,8 +424,8 @@ if __name__ == "__main__":
                             
                             all_ds = xr.concat([append_ds_subset, all_ds], dim=year_dim)
 
-                if CASE_CONFIGS[case_label]["ufunc"] is not None:
-                    all_ds = CASE_CONFIGS[case_label]["ufunc"](all_ds)
+                if LOAD_CONFIGS[case_label]["ufunc"] is not None:
+                    all_ds = LOAD_CONFIGS[case_label]["ufunc"](all_ds)
                 subcase_dict[case_str] = all_ds
             case_dict[subdir] = subcase_dict
         data_dict[case_label] = case_dict
@@ -614,10 +436,10 @@ if __name__ == "__main__":
     control_label = "CESM2_WACCM_1850control"
     control_case = CASE_CONFIGS[case_label]["subdir_cases"][control_label][0]
     subdirs = {
-        "CESM2_WACCM_HIST": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?",
-        "CESM2_WACCM_SSP2-4.5": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?",
-        "ARISE_SAI": 'b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?',
-        "CESM2_WACCM_SSP2-4.5_MCB": "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?",
+        "CESM2_WACCM_HIST": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??",
+        "CESM2_WACCM_SSP2-4.5": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+        "ARISE_SAI": 'b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??',
+        "CESM2_WACCM_SSP2-4.5_MCB": "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??",
     }
     test_var = "PRECIP_THERMO"
     test_var = "FSNS"
@@ -691,10 +513,10 @@ if __name__ == "__main__":
     control_case = CASE_CONFIGS[case_label]["subdir_cases"][control_label][0]
     subdirs = {
         # "CESM2_WACCM_1850control": "b.e21.B1850.f09_g17.CMIP6-piControl.001",
-        "CESM2_WACCM_HIST": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.00?",
-        "CESM2_WACCM_SSP2-4.5": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.00?",
-        "ARISE_SAI": 'b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.00?',
-        "CESM2_WACCM_SSP2-4.5_MCB": "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.00?",
+        "CESM2_WACCM_HIST": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??",
+        "CESM2_WACCM_SSP2-4.5": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+        "ARISE_SAI": 'b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??',
+        "CESM2_WACCM_SSP2-4.5_MCB": "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??",
     }
     test_var = "PRECIP_THERMO"
     test_var = "FSNS"

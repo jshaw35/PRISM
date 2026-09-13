@@ -219,6 +219,7 @@ def load_ensemble_cases(
     case_str,
     varlist,
     identifier: str=None,
+    time_dim: str="time",
 ):
     """
     Load case data with support for wildcard patterns matching multiple ensemble members.
@@ -263,7 +264,7 @@ def load_ensemble_cases(
                 all_files,
                 preprocess=lambda ds: ds[varlist],
                 combine="nested",
-                concat_dim="time",
+                concat_dim=time_dim,
             )
         except:
             all_ds = xr.open_mfdataset(all_files)
@@ -312,8 +313,9 @@ def load_ensemble_cases(
                 # Add ensemble number as a data variable first, then expand the dimension
                 ens_ds = ens_ds.expand_dims({'ens': [ens_number]})
                 # Handle time duplicates in ARISE-1.0 data
-                if ens_ds.indexes['time'].has_duplicates:
-                    ens_ds = ens_ds.drop_duplicates(dim='time')
+                if "time" in ens_ds.indexes:
+                    if ens_ds.indexes['time'].has_duplicates:
+                        ens_ds = ens_ds.drop_duplicates(dim='time')
                 ensemble_datasets.append(ens_ds)
                 
                 logging.info(f"Loaded ensemble {ens_number} with {len(ens_files)} files")
@@ -381,7 +383,7 @@ def load_data_with_configs(CASE_CONFIGS, varlist, year_dim="time", load_into_mem
             logging.info(f"Loading data for subcase: {case_str}")
 
             # Load case data, supporting wildcards for ensemble members
-            all_ds = load_ensemble_cases(datapath, case_str, varlist, **kwargs)
+            all_ds = load_ensemble_cases(datapath, case_str, varlist, time_dim=year_dim, **kwargs)
             if all_ds is None:
                 logging.warning(f"No files found for case {case_label} with case string {case_str} in path {datapath}")
                 continue
@@ -485,10 +487,13 @@ def load_data_with_configs(CASE_CONFIGS, varlist, year_dim="time", load_into_mem
                         # Perform the append operation with time dimension selection
                         # Check if cftime.DatetimeNoLeap is being used and select time accordingly
                         with dask.config.set(**{'array.slicing.split_large_chunks': True}):
-                            if isinstance(append_ds["time"][0].dtype, object):
+                            if np.issubdtype(all_ds[year_dim].dtype, np.integer):
+                                # Integer year coordinates (e.g. int64)
+                                append_ds_subset = append_ds.sel({year_dim: slice(None, str(all_ds[year_dim][0].values - 1))})
+                            elif isinstance(append_ds[year_dim][0].dtype, object):
                                 # Likely cftime objects, select using cftime-compatible method
                                 append_ds_subset = append_ds.sel({year_dim:slice(None, str(all_ds[year_dim][0].dt.year.values - 1))})
-                            elif isinstance(all_ds["time"].values[0], np.datetime64) or isinstance(all_ds["time"].values[0], pd.Timestamp):
+                            elif isinstance(all_ds[year_dim].values[0], np.datetime64) or isinstance(all_ds[year_dim].values[0], pd.Timestamp):
                                 append_ds_subset = append_ds.sel({year_dim:slice(None, str(all_ds[year_dim][0].values - 1))})                        
                             else:
                                 append_ds_subset = append_ds.sel({year_dim:slice(None, str(all_ds[year_dim][0].values - 1))})

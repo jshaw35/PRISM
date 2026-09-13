@@ -1,5 +1,5 @@
 # %%
-from pathlib import Path
+# from pathlib import Path
 import os
 import xarray as xr
 import numpy as np
@@ -7,8 +7,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 from matplotlib.ticker import MultipleLocator
-import fnmatch
-import dask
 
 from J15_shared_functions import (
     # shift_noleap_time_back_one_month,
@@ -305,7 +303,7 @@ def remove_axis_text_objects(ax, remove_strings: list = None):
 # %%
 
 if __name__ == "__main__":
-    data_root = "/glade/work/jonahshaw/PRISM_data/spatial_averages_data/"    
+    data_root = "/glade/work/jonahshaw/PRISM_data/spatial_averages_data/"
     CASE_CONFIGS_ATM = {
         "CESM2-LM": {
             "path": f"{data_root}/CESM2_LME/",
@@ -505,7 +503,7 @@ if __name__ == "__main__":
     data_dict = {}
     for var in data_varlist:
         data_dict[var] = load_data_with_configs(CASE_CONFIGS_ATM, [var], year_dim=year_dim, load_into_memory=False)
-    
+
     ohc_dict = load_data_with_configs(CASE_CONFIGS_OCN, ohc_varlist, year_dim=year_dim, load_into_memory=False)
 
     # %%
