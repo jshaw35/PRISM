@@ -16,7 +16,7 @@ from J15_shared_functions import (
     # crawl_and_list_glob,
     compute_decadal2,
     load_data_with_configs,
-    
+    title_dict,
 )
 
 import logging
@@ -908,37 +908,6 @@ if __name__ == "__main__":
         "preceding_case": ["CESM2 WACCM HIST", "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??"],
     }
 
-    title_dict = {
-        "CESM2-LME": {
-            "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.0??": "CESM2 LME",
-        },
-        "CESM2_WACCM_1850control" :{
-            "b.e21.BW1850.f09_g17.CMIP6-piControl.001": "CESM2 WACCM 1850 Control",
-        },
-        "CESM2-WACCM-HIST": {
-            "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??": "CESM2 WACCM HIST",
-        },
-        "CESM2_WACCM_SSP2-4.5": {
-            "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??": "CESM2 WACCM SSP2-4.5",
-        },
-        "ARISE-SAI": {
-            "1p5K-SAI.0??": "ARISE-SAI 1p5K",
-            "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??": "ARISE-SAI-1.5",
-            "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??": "ARISE-SAI-1.5 EXTENDED",
-        },
-        "ARISE-1.0": {
-            "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??": "ARISE-SAI-1.0",
-            "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??": "ARISE-SAI-1.37-2045",
-        },
-        "CESM2_WACCM_SSP2-4.5_MCB": {
-            "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??": "MCB SMBB-050PCT",
-            "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": "MCB CMIP6 baseline",
-            "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": "MCB CMIP6-025PCT",
-            "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": "MCB CMIP6-050PCT",
-            "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000": "MCB CMIP6-075PCT",
-            "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000": "MCB CMIP6-125PCT",
-        },
-    }
     # Build a plot configs dictionary for a mega plot
     megaplot_cases = [
         "CESM2-WACCM-HIST",
