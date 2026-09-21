@@ -1,12 +1,15 @@
 """Compute integrated EEI for the 1850 piControl simulation on NCAR Glade.
 
 Usage:
-    python run_ieei_piControl.py [--start-year YEAR]
+    python run_ieei_piControl.py [--start-year YEAR] [--end-year YEAR]
 
 Reads CAM monthly FSNT/FLNT output for the piControl case (see config.py),
 computes the area-weighted global-mean EEI and its running time integral
 (iEEI) via ieei.compute_ieei, and writes a single NetCDF output file under
-config.OUTPUT_ROOT.
+config.OUTPUT_ROOT. Both --start-year and --end-year are inclusive and are
+applied to the shifted (true-calendar-month) time axis, the same convention
+run_ohc_piControl.py uses, so a shared --start-year/--end-year pair selects
+the same calendar months from both pipelines.
 """
 import argparse
 import glob
@@ -16,6 +19,7 @@ import xarray as xr
 
 import config
 from ieei import compute_eei, compute_ieei, global_mean, total_joules
+from ohc import shift_noleap_time_back_one_month
 
 
 def find_files(var_glob):
@@ -26,12 +30,21 @@ def find_files(var_glob):
     return files
 
 
-def main(start_year=None):
+def main(start_year=None, end_year=None):
     fsnt_files = find_files(config.FSNT_FILE_GLOB)
     flnt_files = find_files(config.FLNT_FILE_GLOB)
 
     fsnt_ds = xr.open_mfdataset(fsnt_files, combine="by_coords")
     flnt_ds = xr.open_mfdataset(flnt_files, combine="by_coords")
+    # CAM monthly history files use the same end-of-averaging-period time
+    # stamp convention as POP2 (see ohc.shift_noleap_time_back_one_month) --
+    # shift both so time.dt.year matches the calendar year the data actually
+    # describes, and lines up with run_ohc_piControl.py's year filtering.
+    fsnt_ds = shift_noleap_time_back_one_month(fsnt_ds)
+    flnt_ds = shift_noleap_time_back_one_month(flnt_ds)
+    if end_year is not None:
+        fsnt_ds = fsnt_ds.where(fsnt_ds["time"].dt.year <= end_year, drop=True)
+        flnt_ds = flnt_ds.where(flnt_ds["time"].dt.year <= end_year, drop=True)
 
     asr_global = global_mean(fsnt_ds[config.ASR_VAR], fsnt_ds)
     olr_global = global_mean(flnt_ds[config.OLR_VAR], flnt_ds)
@@ -53,9 +66,12 @@ def main(start_year=None):
     out.attrs["olr_variable"] = config.OLR_VAR
     if start_time is not None:
         out.attrs["ieei_start_time"] = start_time
+    if end_year is not None:
+        out.attrs["end_year"] = end_year
 
     os.makedirs(config.OUTPUT_ROOT, exist_ok=True)
-    out_path = os.path.join(config.OUTPUT_ROOT, f"{config.CASE_STR}.iEEI.nc")
+    suffix = f".y{start_year or 1}-{end_year}" if end_year is not None else ""
+    out_path = os.path.join(config.OUTPUT_ROOT, f"{config.CASE_STR}.iEEI{suffix}.nc")
     out.to_netcdf(out_path)
     print(f"Wrote {out_path}")
 
@@ -63,5 +79,6 @@ def main(start_year=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--start-year", type=int, default=None)
+    parser.add_argument("--end-year", type=int, default=None)
     args = parser.parse_args()
-    main(start_year=args.start_year)
+    main(start_year=args.start_year, end_year=args.end_year)

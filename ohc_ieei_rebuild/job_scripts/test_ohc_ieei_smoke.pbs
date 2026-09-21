@@ -1,0 +1,18 @@
+#!/bin/bash -l
+#PBS -N ohc_ieei_smoke_test
+#PBS -A UCUB0144
+#PBS -l select=1:ncpus=1:mem=20GB
+#PBS -l walltime=00:20:00
+#PBS -q casper
+#PBS -j oe
+
+# Minimal smoke test: confirms piControl input files resolve and load, and
+# that every function in the OHC and iEEI pipelines runs without erroring,
+# on a few months of data. Run this before submitting the full 100-year
+# jobs. See ../README.md before first use.
+
+module load conda
+conda activate /glade/work/wkamp/conda-envs/wk_MHWs
+
+cd "$(dirname "$0")/.."
+python test_pipeline_smoke.py

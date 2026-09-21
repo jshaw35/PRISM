@@ -5,12 +5,15 @@ OCN_GRID_FILE) before running anything on Glade/Casper. See README.md for
 the full list of decisions this build makes.
 """
 
-# --- Glade account details: REPLACE THESE before running ------------------
-GLADE_USERNAME = "REPLACE_WITH_YOUR_GLADE_USERNAME"
-PBS_PROJECT_ACCOUNT = "REPLACE_WITH_YOUR_PBS_PROJECT_ACCOUNT"
+# --- Glade account details --------------------------------------------------
+# PBS_PROJECT_ACCOUNT is taken from this user's other active job scripts
+# (e.g. era5_atm/cdo_daily.sh) — confirm it is still the right account to
+# charge before submitting a long-running job.
+GLADE_USERNAME = "wkamp"
+PBS_PROJECT_ACCOUNT = "UCUB0144"
 
 # Where output NetCDF files are written.
-OUTPUT_ROOT = f"/glade/work/{GLADE_USERNAME}/ohc_ieei_rebuild/"
+OUTPUT_ROOT = f"/glade/work/{GLADE_USERNAME}/GEO/PRISM/PRISM/ohc_ieei_rebuild/"
 
 # --- 1850 piControl case ---------------------------------------------------
 # NCAR CMIP6 timeseries archive location (shared community data, not

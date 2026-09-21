@@ -1,0 +1,16 @@
+#!/bin/bash -l
+#PBS -N ieei_picontrol_100yr
+#PBS -A UCUB0144
+#PBS -l select=1:ncpus=2:mem=16GB
+#PBS -l walltime=00:15:00
+#PBS -q casper
+#PBS -j oe
+
+# Computes iEEI for the first 100 years (year 1 through year 100, inclusive)
+# of the 1850 piControl run. See ../README.md before first use.
+
+module load conda
+conda activate /glade/work/wkamp/conda-envs/wk_MHWs
+
+cd "$(dirname "$0")/.."
+python run_ieei_piControl.py --start-year 1 --end-year 100

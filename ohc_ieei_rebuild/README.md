@@ -22,54 +22,74 @@ code in this repository.
 
 ## Files
 
-- `config.py` — Glade paths, case string, physical constants, placeholders
-  to fill in.
+- `config.py` — Glade paths, case string, physical constants.
+  `GLADE_USERNAME`/`PBS_PROJECT_ACCOUNT` are filled in for `wkamp`
+  (account `UCUB0144`, taken from this user's other active job scripts —
+  reconfirm it's still the right account to charge before submitting).
 - `grid_utils.py` — ocean masking/area-weighting and atmosphere
   area-weighting helpers.
-- `ohc.py` — `compute_ohc`, plus dataset loading and the POP2 monthly
-  time-stamp fix.
+- `ohc.py` — `compute_ohc`, plus dataset loading and the POP2/CAM monthly
+  time-stamp fix (`shift_noleap_time_back_one_month`).
 - `ieei.py` — `compute_eei`, `compute_ieei`, month-length weighting,
   global-mean and total-joules helpers.
-- `run_ohc_piControl.py`, `run_ieei_piControl.py` — CLI entry points.
-- `environment.yml` — conda environment spec.
-- `job_scripts/*.pbs` — Casper (PBS) job scripts.
+- `run_ohc_piControl.py`, `run_ieei_piControl.py` — CLI entry points, with
+  optional inclusive `--start-year`/`--end-year` filtering (applied to the
+  shifted, true-calendar-month time axis — both scripts now apply
+  `shift_noleap_time_back_one_month` before filtering, so a shared
+  `--start-year`/`--end-year` pair selects the same calendar months from
+  both pipelines).
+- `test_pipeline_smoke.py` — minimal smoke test: loads a few months from
+  the first file of each pipeline's input, runs every pipeline function,
+  sanity-checks the output, and round-trips a NetCDF write/read, then
+  cleans up after itself.
+- `environment.yml` — conda environment spec (for building a fresh env);
+  not needed if reusing an existing environment like `wk_MHWs` below.
+- `job_scripts/*.pbs` — Casper (PBS) job scripts, using the `wk_MHWs`
+  conda environment at `/glade/work/wkamp/conda-envs/wk_MHWs`:
+  - `test_ohc_ieei_smoke.pbs` — run this first to confirm the pipelines work.
+  - `compute_ohc_piControl_100yr.pbs`, `compute_ieei_piControl_100yr.pbs` —
+    year 1 through year 100 of the piControl run.
+  - `compute_ohc_piControl.pbs`, `compute_ieei_piControl.pbs` — full-record
+    runs (no year filtering); still reference `environment.yml` in a
+    comment rather than `wk_MHWs` — update before using.
 
 ## Before running on Glade
 
-1. Edit `config.py`: set `GLADE_USERNAME` and `PBS_PROJECT_ACCOUNT`, and set
-   `OCN_GRID_FILE` if the piControl TEMP files don't already carry
-   `TAREA`/`KMT`/`dz`/`z_w_bot` (some archive layouts strip static grid
-   variables out of single-variable-per-file time series — check with
-   `ncdump -h` before assuming).
-2. Update the `#PBS -A` account code in both `job_scripts/*.pbs` files to
-   match `PBS_PROJECT_ACCOUNT`.
-3. Build the conda environment: `conda env create -f environment.yml` (or
-   `mamba env create -f environment.yml`), then update the `conda activate`
-   line (currently a comment) in the two `.pbs` job scripts to match where
-   it was built.
-4. Confirm `config.OCN_TSERIES_DIR` / `ATM_TSERIES_DIR` still resolve to
+1. `config.OCN_GRID_FILE` can stay `None` for the piControl case: its
+   `TEMP`/`FSNT`/`FLNT` time-series files already carry `TAREA`/`KMT`/`dz`/
+   `z_w_bot`/`gw`. Only set it if pointing this at a different case whose
+   archive layout strips those static grid variables out.
+2. Confirm `config.OCN_TSERIES_DIR` / `ATM_TSERIES_DIR` still resolve to
    real files (`ls` them) — GLADE campaign-storage paths can move.
+3. Confirm the `wk_MHWs` conda environment still has `xarray`, `numpy`,
+   `pandas`, `netCDF4`, `cftime`, `dask` — it did as of the last check.
 
 ## Running
 
 ```
-qsub job_scripts/compute_ohc_piControl.pbs
-qsub job_scripts/compute_ieei_piControl.pbs
+qsub job_scripts/test_ohc_ieei_smoke.pbs          # run first
+qsub job_scripts/compute_ohc_piControl_100yr.pbs
+qsub job_scripts/compute_ieei_piControl_100yr.pbs
 ```
 
 or interactively on a Casper session:
 
 ```
-python run_ohc_piControl.py
-python run_ieei_piControl.py
+conda activate /glade/work/wkamp/conda-envs/wk_MHWs
+python test_pipeline_smoke.py
+python run_ohc_piControl.py --start-year 1 --end-year 100
+python run_ieei_piControl.py --start-year 1 --end-year 100
 ```
 
 Output:
-- `{OUTPUT_ROOT}/b.e21.BW1850.f09_g17.CMIP6-piControl.001.OHC.nc` —
+- `{OUTPUT_ROOT}/b.e21.BW1850.f09_g17.CMIP6-piControl.001.OHC.y1-100.nc` —
   `OHC` (per-area, by depth bin `-1`/300/700/2000 m) and
   `OHC_global_mean`.
-- `{OUTPUT_ROOT}/b.e21.BW1850.f09_g17.CMIP6-piControl.001.iEEI.nc` —
+- `{OUTPUT_ROOT}/b.e21.BW1850.f09_g17.CMIP6-piControl.001.iEEI.y1-100.nc` —
   `EEI_global_mean`, `iEEI_global_mean`, `iEEI_total_joules`.
+- Running without `--end-year` (the original two `job_scripts/*.pbs`, not
+  the `_100yr` ones) drops the `.y<start>-<end>` suffix and writes
+  `...OHC.nc` / `...iEEI.nc` instead.
 
 ## Sanity checks worth running on the output
 
