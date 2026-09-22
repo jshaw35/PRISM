@@ -555,4 +555,97 @@ title_dict = {
     },
 }
 
+CASE_CONFIGS_TEMPLATE = {
+    "CESM2-LM": {
+        "path": "CESM2_LME/",
+        "subdir_cases": ["b.e21.BWmaHIST.f19_g17.PMIP4-past1000.0??"],
+        "append_cases": {
+            "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.0??": None,
+        },
+        "ufunc": None,
+    },
+    "CESM2_WACCM_1850control" :{
+        "path": "CESM2_WACCM_1850control/",
+        "subdir_cases": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"],
+        "append_cases": {
+            "b.e21.BW1850.f09_g17.CMIP6-piControl.001": None,
+        },
+        "ufunc": None,
+    },
+    "CESM2-WACCM-HIST": {
+        "path": "CESM2_WACCM_HIST/",
+        "subdir_cases": [
+            "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??",
+        ],
+        "append_cases": {
+            "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??": None,
+        },
+        "ufunc": None,
+    },
+    "CESM2_WACCM_SSP2-4.5": {
+            "path": "CESM2_WACCM_SSP2-4.5/",
+            "subdir_cases": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??"],
+            "append_cases": {
+                "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??": None,
+            },
+            "ufunc": None,
+    },
+    "ARISE-SAI": {
+        "path": "ARISE_SAI/",
+        "subdir_cases": [
+            "1p5K-SAI.0??",
+            "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??",
+            "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??",
+        ],
+        "append_cases": {
+            "1p5K-SAI.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+            "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+            "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??": "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??",
+            # "1p5K-SAI.0??": None,
+            # "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??": None,
+            # "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??": None,
+        },
+        "ufunc": None,
+    },
+    "ARISE-1.0": {
+        "path": "ARISE-1.0/",
+        "subdir_cases": [
+            "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??",
+            "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??",
+        ],
+        "append_cases": {
+            "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+            "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+            # "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??": None,
+            # "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??": None,
+        },
+        "ufunc": None,
+    },
+    "CESM2_WACCM_SSP2-4.5_MCB": {
+        "path": "CESM2_WACCM_SSP2-4.5_MCB/",
+        "subdir_cases": [
+            "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??",
+            "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000",
+            "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000",
+            "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000",
+            "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000",
+            "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000",
+        ],
+        "append_cases": {
+            "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+            "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+            "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+            "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+            "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+            "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
+            # "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??": None,
+            # "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": None,
+            # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": None,
+            # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": None,
+            # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000": None,
+            # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000": None,
+        },
+        "ufunc": None,
+    },
+}
 # %%
