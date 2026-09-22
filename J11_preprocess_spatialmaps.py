@@ -100,10 +100,10 @@ def compute_picontrol_uncertainty(
     pi_decadal_detrended = pi_decadal_detrended.chunk({"year": -1})
     pi_decadal_quantiles = pi_decadal_detrended.quantile([0.025, 0.975], dim=quantile_vars)
     pi_decadal_unc = xr.concat([pi_decadal_quantiles, pi_decadal_std], dim="quantile")
-    
+
     # Concatenate annual and decadal along period dimension
     pi_unc_all = xr.concat([pi_annual_unc, pi_decadal_unc], dim=xr.DataArray([1, 10], dims=["period"]))
-    
+
     # Rename variables to indicate they are uncertainty measures
     if variable_names is not None:
         rename_dict = {var: f"{var}_uncertainty" for var in variable_names}
@@ -111,13 +111,13 @@ def compute_picontrol_uncertainty(
         # If no variable names provided, rename all data variables
         rename_dict = {var: f"{var}_uncertainty" for var in pi_unc_all.data_vars}
     pi_unc_all = pi_unc_all.rename(rename_dict)
-    
+
     # Extract branch period mean state
     pi_branch_period = pi_annual.sel(year=slice(*branch_period))
-    
+
     # Merge uncertainty with the mean state
     pi_all = xr.merge([pi_unc_all, pi_branch_period], compat='override')
-    
+
     return pi_all
 
 
@@ -190,7 +190,7 @@ if __name__ == "__main__":
              },
              "ufunc": lambda ds: weighted_periodmean(ds, slice("2060", "2069"), account_for_leap=False),
         },
-        "ARISE-SAI": {
+        "ARISE_SAI": {
             "path": "/gdex/data/d651059/ARISE-SAI-1.5/",
             "subdir_cases": [
                 "1p5K-SAI.0??",
@@ -268,7 +268,7 @@ if __name__ == "__main__":
             },
             "ufunc": lambda ds: weighted_periodmean(ds, slice("2060", "2069"), account_for_leap=False),
         },
-        "ARISE-SAI": {
+        "ARISE_SAI": {
             "path": ohc_data_root + "ARISE_SAI/",
             "subdir_cases": [
                 "1p5K-SAI.0??",
@@ -610,6 +610,7 @@ if __name__ == "__main__":
 
     # %%
     # Compute the 2060 - 2069 spatial means
+    year_dim = "time"
     load_config_dict = CASE_CONFIGS1_DERIVED
     for var in atm_derived_varlist:
         logging.info(f"Processing {var}")
