@@ -13,19 +13,15 @@ import os
 import xarray as xr
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib as mpl
-import pandas as pd
 import seaborn as sns
 import logging
+from copy import deepcopy
 
 from J15_shared_functions import (
-    shift_noleap_time_back_one_month,
-    load_ensemble_cases,
-    match_wildcard_case,
     load_data_with_configs,
-    weighted_annualmean,
     compute_decadal2,
     title_dict,
+    CASE_CONFIGS_TEMPLATE,
 )
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -453,95 +449,18 @@ def plot_control_uncertainty_scatter(
 if __name__ == "__main__":
     control_case = "CESM2_WACCM_HIST_2000_2014"
     data_root = f"/glade/work/jonahshaw/PRISM_data/error_relativetobaseline_atm/{control_case}/"
-    CASE_CONFIGS_ATM = {
-        "CESM2_WACCM_1850control" :{
-            "path": f"{data_root}/CESM2_WACCM_1850control/",
-            "subdir_cases": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"],
-            "append_cases": {
-                "b.e21.BW1850.f09_g17.CMIP6-piControl.001": None,
-            },
-            "ufunc": None,
-        },
-        "CESM2-WACCM-HIST": {
-            "path": f"{data_root}/CESM2_WACCM_HIST/",
-            "subdir_cases": [
-                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??",
-            ],
-            "append_cases": {
-                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??": None,
-            },
-            "ufunc": None,
-        },
-        "CESM2_WACCM_SSP2-4.5": {
-             "path": f"{data_root}/CESM2_WACCM_SSP2-4.5/",
-             "subdir_cases": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??"],
-             "append_cases": {
-                 "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??": None,
-             },
-             "ufunc": None,
-        },
-        "ARISE-SAI": {
-            "path": f"{data_root}/ARISE_SAI/",
-            "subdir_cases": [
-                "1p5K-SAI.0??",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??",
-            ],
-            "append_cases": {
-                "1p5K-SAI.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??": "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??",
-                # "1p5K-SAI.0??": None,
-                # "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??": None,
-                # "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??": None,
-            },
-            "ufunc": None,
-        },
-        "ARISE-1.0": {
-            "path": f"{data_root}/ARISE-1.0/",
-            "subdir_cases": [
-                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??",
-            ],
-            "append_cases": {
-                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                # "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??": None,
-                # "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??": None,
-            },
-            "ufunc": None,
-        },
-        "CESM2_WACCM_SSP2-4.5_MCB": {
-            "path": f"{data_root}/CESM2_WACCM_SSP2-4.5_MCB/",
-            "subdir_cases": [
-                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000",
-            ],
-            "append_cases": {
-                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                # "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??": None,
-                # "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": None,
-                # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": None,
-                # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": None,
-                # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000": None,
-                # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000": None,
-            },
-            "ufunc": None,
-        },
-    }
+    CASE_CONFIGS_ATM = deepcopy(CASE_CONFIGS_TEMPLATE)
+
+    # Remove cases that are not used here
+    CASE_CONFIGS_ATM.pop("CESM2-LM", None)
+    CASE_CONFIGS_ATM.pop("CESM2_WACCM_1850control", None)
+
+    for config in CASE_CONFIGS_ATM.values():
+        config["path"] = str(Path(data_root) / config.pop("path"))
 
     # %%
     # Load the data using the generalized loading function
-    data_varlist = ["FLNT", "FSNT", "FNNT", "FLNS", "FSNS", "TS", "PRECIP_THERMO", "LHFLX", "PRECT"]
+    data_varlist = ["FLNT", "FSNT", "FNNT", "FLNS", "FSNS", "TS", "PRECIP_THERMO", "LHFLX", "SHFLX", "PRECT"]
     # data_varlist = ['CLDTOT', 'FLNR', 'FLNS', 'FLNSC', 'FLNT', 'FLNTC', 'FLNTCLR', 'FLUT', 'FSNR', 'FSNS', 'FSNSC', 'FSNT', 'FSNTC', 'FSNTOA', 'FSNTOAC', 'LHFLX', 'SHFLX', 'TS', "PRECT", "PRECC", "PRECL", "PRECIP_THERMO", "FNNT"]
     year_dim = "year"
     ohc_varlist = ["OHC", "OHC_global_mean"]
@@ -556,10 +475,11 @@ if __name__ == "__main__":
     # fig, axes = plt.subplots(2, 3, figsize=(20, 12))
     fig, axes = plt.subplots(3, 3, figsize=(20, 18))
     axs = axes.flatten()
-    plot_vars = ["FLNT", "FSNT", "FNNT", "FLNS", "FSNS", "TS", "PRECIP_THERMO", "LHFLX", "PRECT"]
+    plot_vars = ["FNNT", "FLNT", "FSNT", "FLNS", "FSNS", "TS", "PRECIP_THERMO", "LHFLX", "SHFLX", "PRECT"]
+    # plot_vars = ["FLNT", "FSNT", "FNNT", "FLNS", "FSNS", "TS", "PRECIP_THERMO", "LHFLX", "PRECT"]
     # plot_vars = ["FLNT", "FSNT", "FNNT", "TS", "PRECIP_THERMO", "LHFLX"]
     time_dim = "year"
-    control_case = "CESM2_WACCM_1850control_0100_0499"
+    # control_case = "CESM2_WACCM_1850control_0100_0499"
     nullhypothesis_case = "CESM2_WACCM_SSP2-4.5"
     nullhypothesis_experiment = "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??"
     nullhypothesis_tsel = slice(2015, 2034)
@@ -601,7 +521,6 @@ if __name__ == "__main__":
         ax.set_ylabel("NMSE", fontsize=fontsize)
         ax.grid(True, alpha=0.3)
         ax.set_facecolor("whitesmoke")
-        # ax.legend()
     axs[2].legend()
 
     # %%
