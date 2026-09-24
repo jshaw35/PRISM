@@ -12,9 +12,9 @@ import logging
 
 # import functions from J14_CESM_compute_THERMO_PRECIP.py
 from J14_CESM_compute_newvars_parallel import (
-    compute_thermoprecip,
     compute_thermoprecip_wrapper,
     compute_toaimbalance_wrapper,
+    compute_surfaceimbalance_wrapper,
     crawl_and_process2,
 )
 
@@ -49,6 +49,13 @@ if __name__ == "__main__":
         input_dir=load_path,
         output_dir=save_path,
         process_fn=compute_toaimbalance_wrapper,
+        match_var=match_var,
+    )
+
+    crawl_and_process2(
+        input_dir=load_path,
+        output_dir=save_path,
+        process_fn=compute_surfaceimbalance_wrapper,
         match_var=match_var,
     )
 

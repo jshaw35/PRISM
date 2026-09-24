@@ -123,6 +123,52 @@ def compute_thermoprecip_wrapper(
     return precip_ds, save_filename
 
 
+def compute_surfaceimbalance_wrapper(
+    filepath: str,
+    match_var: str,
+    var_detect_str: str = "h0",
+    out_root: str = None,
+):
+
+    # Parse the variable name from the test path, assuming it is in the format of "case/atm/proc/tseries/month_1/case.cam.h0.VAR.nc"
+    filename = os.path.splitext(os.path.basename(filepath))[0]
+    name_parts = filename.split(".")
+    # Skip if not a h0 file
+    try:
+        marker_idx = name_parts.index(var_detect_str)
+    except ValueError:
+        return None, None
+    test_var = name_parts[marker_idx + 1]
+    if test_var != match_var:
+        return None, None
+
+    save_filename = filename.replace(match_var, "FNNS") + ".nc"
+    if out_root is not None:
+        save_filepath = os.path.join(out_root, save_filename)
+        if os.path.exists(save_filepath):
+            logging.info(f"{save_filepath} already exists")
+            return None, None
+
+    # Compute the precipitation proxy variable and add it to the list of variables to average
+    surfnet_vars = ["FLNS", "FSNS"]
+    surfnet_vars_plus = surfnet_vars + ["gw"]
+    surfnet_files = [filepath.replace(match_var, _var) for _var in surfnet_vars]
+    for _file in surfnet_files:
+        assert os.path.exists(_file), f"{_file} does not exist"
+    try:
+        ds_merged = xr.open_mfdataset(surfnet_files, combine="by_coords", preprocess=lambda x: x.drop_vars(["time_written", "date_written"], errors="ignore"))
+    except:
+        logging.info(surfnet_files)
+    ds_merged = ds_merged[surfnet_vars_plus]
+    surfnet_ds = ds_merged["FSNS"] - ds_merged["FLNS"]
+    surfnet_ds.attrs["long_name"] = "Surface net radiation (FSNS - FLNS)"
+    surfnet_ds.attrs["units"] = "W/m^-2"
+    surfnet_ds.name = "FNNS"
+    surfnet_ds = xr.merge([surfnet_ds, ds_merged["gw"]])
+
+    return surfnet_ds, save_filename
+
+
 def compute_toaimbalance_wrapper(
     filepath: str,
     match_var: str,
