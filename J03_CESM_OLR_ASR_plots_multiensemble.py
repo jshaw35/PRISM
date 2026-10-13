@@ -1,19 +1,18 @@
 # %%
 from pathlib import Path
 import os
-import xarray as xr
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import seaborn as sns
-# import fnmatch
-# import dask
+from copy import deepcopy
 
 import logging
 from J15_shared_functions import (
     weighted_annualmean,
     compute_decadal2,
     load_data_with_configs,
+    CASE_CONFIGS_TEMPLATE,
 )
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -119,6 +118,7 @@ def plot_radiative_imbalance_annual(
             linestyle="--",
             zorder=0,
         )
+
     ax.set_xlabel("OLR [Wm$^{-2}$]", fontsize=fontsize)
     ax.set_ylabel("ASR [Wm$^{-2}$]", fontsize=fontsize)
     if not line11:
@@ -136,108 +136,80 @@ def plot_radiative_imbalance_annual(
         return fig, ax
 
 
+def add_arrow(
+    ax,
+    arrow_center,
+    length,
+    fontsize=10,
+    labels=("gaining energy", "losing energy"),
+):
+    # Add arrows
+    ax.annotate(
+        "",
+        xy=(arrow_center, arrow_center),
+        xytext=(arrow_center - length, arrow_center + length),
+        fontsize=10,
+        color="black",
+        arrowprops=dict(arrowstyle="<-", lw=2, color="black"),
+        zorder=3,
+    )
+    ax.annotate(
+        "",
+        xy=(arrow_center, arrow_center),
+        xytext=(arrow_center + length, arrow_center - length),
+        fontsize=10,
+        color="black",
+        arrowprops=dict(arrowstyle="<-", lw=2, color="black"),
+        zorder=3,
+    )
+    ax.text(
+        241, 243,
+        labels[0],
+        fontsize=fontsize, color="black", ha="center", va="bottom")
+    ax.text(
+        243, 241,
+        labels[1],
+        fontsize=fontsize, color="black", ha="center", va="top",
+    )
+
+
+def add_colorfill(
+    ax, minmax,
+    color_above="#C86D61",
+    color_below="#5C86BD",
+    alpha=0.5,
+):
+    min_val, max_val = minmax
+    ax.fill_between(
+        [min_val, max_val],
+        [min_val, max_val],
+        [max_val, max_val],
+        color=color_above,
+        alpha=alpha,
+        zorder=0,
+    )
+    ax.fill_between(
+        [min_val, max_val],
+        [min_val, min_val],
+        [min_val, max_val],
+        color=color_below,
+        alpha=alpha,
+        zorder=0,
+    )
+
 # %%
 # ============================================================================
 # CONFIGURATION SECTION
 # ============================================================================
 
 if __name__ == "__main__":
-    data_root = "/glade/work/jonahshaw/PRISM_data/spatial_averages_data/"    
-    CASE_CONFIGS = {
-        "CESM2-LM": {
-            "path": f"{data_root}/CESM2_LME/",
-            "subdir_cases": ["b.e21.BWmaHIST.f19_g17.PMIP4-past1000.0??"],
-            "append_cases": {
-                "b.e21.BWmaHIST.f19_g17.PMIP4-past1000.0??": None,
-            },
-            "ufunc": None,
-        },
-        "CESM2_WACCM_1850control" :{
-            "path": f"{data_root}/CESM2_WACCM_1850control/",
-            "subdir_cases": ["b.e21.BW1850.f09_g17.CMIP6-piControl.001"],
-            "append_cases": {
-                "b.e21.BW1850.f09_g17.CMIP6-piControl.001": None,
-            },
-            "ufunc": None,
-        },
-        "CESM2-WACCM-HIST": {
-            "path": f"{data_root}/CESM2_WACCM_HIST/",
-            "subdir_cases": [
-                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??",
-            ],
-            "append_cases": {
-                "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.0??": None,
-            },
-            "ufunc": None,
-        },
-        "CESM2_WACCM_SSP2-4.5": {
-             "path": f"{data_root}/CESM2_WACCM_SSP2-4.5/",
-             "subdir_cases": ["b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??"],
-             "append_cases": {
-                #  "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??": "b.e21.BWHIST.f09_g17.CMIP6-historical-WACCM.001",
-                 "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??": None,
-             },
-             "ufunc": None,
-        },
-        "ARISE-SAI": {
-            "path": f"{data_root}/ARISE_SAI/",
-            "subdir_cases": [
-                "1p5K-SAI.0??",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??",
-            ],
-            "append_cases": {
-                "1p5K-SAI.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??": "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??",
-                # "1p5K-SAI.0??": None,
-                # "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DEFAULT.0??": None,
-                # "b.e21.BW.f09_g17.SSP245-TSMLT-ARISE-EXTENDED.0??": None,
-            },
-            "ufunc": None,
-        },
-        "ARISE-1.0": {
-            "path": f"{data_root}/ARISE-1.0/",
-            "subdir_cases": [
-                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??",
-            ],
-            "append_cases": {
-                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                # "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-DELAYED-2045.0??": None,
-                # "b.e21.BW.f09_g17.SSP245-TSMLT-GAUSS-LOWER-0.5.0??": None,
-            },
-            "ufunc": None,
-        },
-        "CESM2_WACCM_SSP2-4.5_MCB": {
-            "path": f"{data_root}/CESM2_WACCM_SSP2-4.5_MCB/",
-            "subdir_cases": [
-                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000",
-            ],
-            "append_cases": {
-                "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000": "b.e21.BWSSP245cmip6.f09_g17.CMIP6-SSP2-4.5-WACCM.0??",
-                # "b.e21.BSSP245smbb.f09_g17.MCB-050PCT.0??": None,
-                # "b.e21.BSSP245cmip6.f09_g17.CMIP6-baseline.000": None,
-                # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-025PCT.000": None,
-                # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-050PCT.000": None,
-                # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-075PCT.000": None,
-                # "b.e21.BSSP245cmip6.f09_g17.CMIP6-MCB-125PCT.000": None,
-            },
-            "ufunc": None,
-        },
-    }
-    
+
+    data_root = "/glade/work/jonahshaw/PRISM_data/spatial_averages_data/"
+    CASE_CONFIGS = deepcopy(CASE_CONFIGS_TEMPLATE)
+
+    for config in CASE_CONFIGS.values():
+        config["path"] = str(Path(data_root) / config.pop("path"))
+
     asr_var = "FSNT"
     olr_var = "FLNT"
     ts_var = "TS"
@@ -420,6 +392,10 @@ if __name__ == "__main__":
             linestyle="--",
             zorder=0,
         )
+        add_colorfill(ax, (min_val, max_val))
+
+    # Add color fill for the regions above and below the 1-1 line
+    add_arrow(axs[0], 242, 1, fontsize=10)
     axs[-1].set_ylabel("")
     # %%
     fig.savefig("figures/figure_OLR_ASR_past.png", dpi=300, bbox_inches='tight')
