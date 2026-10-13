@@ -138,26 +138,48 @@ def plot_radiative_imbalance_annual(
         plot_kwargs = {}
 
     # Plot OLR vs ASR with color gradient for year dimension
-    if connected:
-        ax.plot(
+    if "ens" not in olr_da.dims:
+        if connected:
+            ax.plot(
+                olr_da,
+                asr_da,
+                color="black",
+                alpha=0.5,
+                zorder=5,
+                linewidth=0.5,
+            )
+
+        scatter = ax.scatter(
             olr_da,
             asr_da,
-            color="black",
-            alpha=0.5,
-            zorder=5,
-            linewidth=0.5,
+            c=olr_da['year'],
+            marker='o',
+            cmap=cmap,
+            norm=norm,
+            zorder=10,
+            **plot_kwargs,
         )
-
-    scatter = ax.scatter(
-        olr_da,
-        asr_da,
-        c=olr_da['year'],
-        marker='o',
-        cmap=cmap,
-        norm=norm,
-        zorder=10,
-        **plot_kwargs,
-    )
+    else:
+        for i in range(len(olr_da['ens'])):
+            if connected:
+                ax.plot(
+                    olr_da.isel(ens=i),
+                    asr_da.isel(ens=i),
+                    color="black",
+                    alpha=0.5,
+                    zorder=5,
+                    linewidth=0.5,
+                )
+            scatter = ax.scatter(
+                olr_da.isel(ens=i),
+                asr_da.isel(ens=i),
+                c=olr_da['year'],
+                marker='o',
+                cmap=cmap,
+                norm=norm,
+                zorder=10,
+                **plot_kwargs,
+            )
 
     # Add a colorbar with discrete intervals and extend='both' keyword
     if norm is None:

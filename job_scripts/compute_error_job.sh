@@ -1,28 +1,15 @@
-#!/bin/bash
+#!/bin/bash -l
+#PBS -N compute_error
+#PBS -A UCUC0007
+#PBS -l select=1:ncpus=4:mem=32GB:ngpus=0
+#PBS -l walltime=1:59:59
+#PBS -q casper
+#PBS -o /glade/u/home/jonahshaw/Scripts/git_repos/PRISM/job_logs/
+#PBS -e /glade/u/home/jonahshaw/Scripts/git_repos/PRISM/job_logs/
 
-# This means each job will request N ntasks, on N nodes with N cpus-per-task
+# Kill all casper jobs with: qselect -u jonahshaw | xargs qdel
+echo "Job started at $(date)"
+mamba run -p /glade/work/jonahshaw/conda-envs/hackathon_extended \
+    python /glade/u/home/jonahshaw/Scripts/git_repos/PRISM/J06_CESM_compute_bias.py
 
-# %A: Job ID
-# %a: Array Task ID
-# ----------------------------------------------------------
-# #SBATCH --account=ucb762_asc1                   # Ascent Allocation on Alpine
-#SBATCH --nodes=1
-#SBATCH --time=01:59:59
-#SBATCH --partition=amilan
-#SBATCH --qos=normal
-#SBATCH --mem=32G
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4
-#SBATCH --job-name=error_background_CESM
-#SBATCH --output=/projects/josh2250/PRISM/job_logs/error_background_CESM_%A_%a.out
-#SBATCH --error=/projects/josh2250/PRISM/job_logs/error_background_CESM_%A_%a.err
-#SBATCH --mail-user=josh2250@colorado.edu
-#SBATCH --mail-type=ALL
-# #SBATCH --array=101-173    # 73 measurements from the ensemble_profiles to process
-
-ml anaconda
-conda activate /curc/sw/anaconda3/2023.09/envs/ATOC_NWP
-python /projects/josh2250/PRISM/J06_CESM_compute_bias.py
-
-# Submit with sbatch
-# sbatch job_scripts/compute_error_job.sh
+echo "Job completed successfully at $(date)"
