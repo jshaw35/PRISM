@@ -34,22 +34,35 @@ def main(start_year=None, end_year=None):
     fsnt_files = find_files(config.FSNT_FILE_GLOB)
     flnt_files = find_files(config.FLNT_FILE_GLOB)
 
-    fsnt_ds = xr.open_mfdataset(fsnt_files, combine="by_coords")
-    flnt_ds = xr.open_mfdataset(flnt_files, combine="by_coords")
+    # data_vars="minimal"/coords="minimal"+compat="override": without this,
+    # open_mfdataset's default data_vars="all" broadcasts the time-invariant
+    # `gw` (Gaussian latitude weights) across the new time dimension when
+    # concatenating 2+ files (see ohc.open_ocean_dataset for the same issue
+    # on the ocean side -- it silently corrupted OHC's global_area_m2 there).
+    mfdataset_kwargs = dict(combine="by_coords", data_vars="minimal", coords="minimal", compat="override")
+    fsnt_ds = xr.open_mfdataset(fsnt_files, **mfdataset_kwargs)
+    flnt_ds = xr.open_mfdataset(flnt_files, **mfdataset_kwargs)
     # CAM monthly history files use the same end-of-averaging-period time
     # stamp convention as POP2 (see ohc.shift_noleap_time_back_one_month) --
     # shift both so time.dt.year matches the calendar year the data actually
     # describes, and lines up with run_ohc_piControl.py's year filtering.
     fsnt_ds = shift_noleap_time_back_one_month(fsnt_ds)
     flnt_ds = shift_noleap_time_back_one_month(flnt_ds)
+    # isel() with a boolean mask, not where(cond, drop=True): the latter
+    # broadcasts every variable against cond's dimension, even ones (gw) that
+    # don't have a time dimension at all (see run_ohc_piControl.py, which hit
+    # the identical bug on TAREA).
     if end_year is not None:
-        fsnt_ds = fsnt_ds.where(fsnt_ds["time"].dt.year <= end_year, drop=True)
-        flnt_ds = flnt_ds.where(flnt_ds["time"].dt.year <= end_year, drop=True)
+        fsnt_ds = fsnt_ds.isel(time=(fsnt_ds["time"].dt.year <= end_year).values)
+        flnt_ds = flnt_ds.isel(time=(flnt_ds["time"].dt.year <= end_year).values)
 
     asr_global = global_mean(fsnt_ds[config.ASR_VAR], fsnt_ds)
     olr_global = global_mean(flnt_ds[config.OLR_VAR], flnt_ds)
 
-    start_time = f"{start_year}-01-01" if start_year is not None else None
+    # Zero-padded to 4 digits: xarray's cftime ISO-8601 parser (used by
+    # compute_ieei's eei.sel(time=slice(start_time, ...))) rejects "1-01-01",
+    # requiring "0001-01-01".
+    start_time = f"{start_year:04d}-01-01" if start_year is not None else None
     eei = compute_eei(asr_global, olr_global)
     ieei = compute_ieei(eei, start_time=start_time)
     ieei_total_j = total_joules(ieei)

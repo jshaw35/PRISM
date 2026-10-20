@@ -47,7 +47,23 @@ def open_ocean_dataset(temp_paths, grid_path=None, chunks=None):
     POP2 history file containing the static grid fields) if they are missing
     from `temp_paths` itself.
     """
-    ds = xr.open_mfdataset(temp_paths, combine="by_coords", chunks=chunks, decode_timedelta=True)
+    # data_vars="minimal"/coords="minimal" (with compat="override" to pick
+    # the first file's value without checking equality across all files,
+    # since checking would still load and compare every file's copy) keep
+    # time-invariant grid variables (TAREA, KMT, dz, z_w_bot) at their
+    # native (nlat, nlon)/(z_t,) shape. Without this, open_mfdataset's
+    # default data_vars="all" broadcasts them across the new time dimension
+    # when concatenating 2+ files, silently turning e.g. TAREA into
+    # (time, nlat, nlon) and breaking any code that assumes it's static.
+    ds = xr.open_mfdataset(
+        temp_paths,
+        combine="by_coords",
+        chunks=chunks,
+        decode_timedelta=True,
+        data_vars="minimal",
+        coords="minimal",
+        compat="override",
+    )
     missing = [v for v in REQUIRED_OCEAN_VARS if v not in ds]
     missing += [c for c in REQUIRED_OCEAN_COORDS if c not in ds.coords and c not in ds]
     if missing:
@@ -70,7 +86,13 @@ def compute_ohc(ds, rho=RHO_SW_KG_M3, cp=CP_SW_J_KG_K, depth_bins_m=DEPTH_BINS_M
     Returns a Dataset with:
       - OHC: per-column-area OHC [J/m^2], dims (..., ohc_depth, nlat, nlon)
         where ohc_depth in {-1 (full column), 300, 700, 2000} (meters)
-      - OHC_global_mean: TAREA-weighted global mean [J/m^2], dims (..., ohc_depth)
+      - OHC_global_mean: TAREA-weighted global mean [J per m^2 of ocean],
+        dims (..., ohc_depth)
+      - dOHC_total_joules: total ocean heat gained since the first time step
+        [J], dims (..., ohc_depth, time) -- directly comparable to
+        iEEI_total_joules
+      - ocean_volume_m3: ocean volume in each (cumulative) depth bin [m^3],
+        dims (ohc_depth,)
     and attrs global_area_m2, ocean_area_m2, rho_kg_m3, cp_j_kg_k.
     """
     dz_m = ds["dz"] / 100.0
@@ -82,22 +104,53 @@ def compute_ohc(ds, rho=RHO_SW_KG_M3, cp=CP_SW_J_KG_K, depth_bins_m=DEPTH_BINS_M
     ohc_layers = ohc_per_vol * dz_m  # J/m^2 per vertical layer
 
     full_depth = ohc_layers.sum(dim="z_t", skipna=True)
-    depth_masks = depth_bin_masks(ds["z_w_bot"], depth_bins_m)
+    # z_w_bot lives on its own "z_w_bot" dimension in the source file, not
+    # "z_t", even though it's the same 60 layers positionally (z_t = layer
+    # centers, z_w_bot = layer bottoms). Left as-is, ohc_layers.where(mask)
+    # below would broadcast the two mismatched 60-length dimensions against
+    # each other (a 60x60 outer product) instead of aligning layer-by-layer,
+    # and .sum(dim="z_t") would only collapse one of them -- silently leaving
+    # a bogus leftover "z_w_bot" axis in every downstream array. Relabel it
+    # onto "z_t" (sharing z_t's actual coordinate values) so it aligns
+    # position-for-position with ohc_layers instead.
+    z_w_bot_on_z_t = ds["z_w_bot"].rename({"z_w_bot": "z_t"}).assign_coords(z_t=ds["z_t"])
+    depth_masks = depth_bin_masks(z_w_bot_on_z_t, depth_bins_m)
     binned = [ohc_layers.where(mask).sum(dim="z_t", skipna=True) for mask in depth_masks.values()]
 
     ohc_depth_index = pd.Index([-1, *depth_bins_m], name="ohc_depth")
     ohc_per_area = xr.concat([full_depth, *binned], dim=ohc_depth_index)
     ohc_per_area = ohc_per_area.where(column_mask)
 
+    cell_volume_m3 = (tarea_m2 * dz_m).where(level_mask)
+    ocean_volume_m3 = xr.concat(
+        [cell_volume_m3.sum(), *[cell_volume_m3.where(mask).sum() for mask in depth_masks.values()]],
+        dim=ohc_depth_index,
+    )
+
     global_area_m2 = tarea_m2.sum(dim=["nlat", "nlon"])
     ocean_area_m2 = tarea_m2.where(column_mask, other=0.0).sum(dim=["nlat", "nlon"])
     ohc_global_mean = area_weighted_global_mean(ohc_per_area, tarea_m2, column_mask)
+    ohc_total_j = ohc_global_mean * ocean_area_m2
+    d_ohc_total_j = ohc_total_j - ohc_total_j.isel(time=0)
 
-    out = xr.Dataset({"OHC": ohc_per_area, "OHC_global_mean": ohc_global_mean})
+    out = xr.Dataset(
+        {
+            "OHC": ohc_per_area,
+            "OHC_global_mean": ohc_global_mean,
+            "dOHC_total_joules": d_ohc_total_j,
+            "ocean_volume_m3": ocean_volume_m3,
+        }
+    )
     out.attrs["global_area_m2"] = float(global_area_m2.values)
     out.attrs["ocean_area_m2"] = float(ocean_area_m2.values)
     out.attrs["rho_kg_m3"] = rho
     out.attrs["cp_j_kg_k"] = cp
     out["OHC"].attrs.update(units="J m-2", long_name="Ocean heat content per unit column area, by depth bin (-1 = full column)")
-    out["OHC_global_mean"].attrs.update(units="J m-2", long_name="Area-weighted global-mean ocean heat content, by depth bin")
+    out["OHC_global_mean"].attrs.update(
+        units="J m-2", long_name="Area-weighted global-mean ocean heat content per m^2 of ocean, by depth bin"
+    )
+    out["dOHC_total_joules"].attrs.update(
+        units="J", long_name="Total ocean heat content gained since the first time step, by depth bin"
+    )
+    out["ocean_volume_m3"].attrs.update(units="m3", long_name="Ocean volume in each depth bin (-1 = full column)")
     return out

@@ -1,8 +1,8 @@
 #!/bin/bash -l
 #PBS -N ieei_picontrol_100yr
-#PBS -A UCUB0144
-#PBS -l select=1:ncpus=2:mem=16GB
-#PBS -l walltime=00:15:00
+#PBS -A UCUB0207
+#PBS -l select=1:ncpus=2:mem=32GB
+#PBS -l walltime=00:10:00
 #PBS -q casper
 #PBS -j oe
 
@@ -12,5 +12,5 @@
 module load conda
 conda activate /glade/work/wkamp/conda-envs/wk_MHWs
 
-cd "$(dirname "$0")/.."
+cd /glade/work/wkamp/GEO/PRISM/PRISM/ohc_ieei_rebuild
 python run_ieei_piControl.py --start-year 1 --end-year 100

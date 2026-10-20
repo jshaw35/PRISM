@@ -205,3 +205,11 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Large pipeline outputs (GitHub rejects files > 100 MB); regenerate with
+# ohc_ieei_rebuild/job_scripts/compute_ohc_piControl*.pbs
+ohc_ieei_rebuild/*.OHC*.nc
+
+# PBS job logs (<jobname>.o<jobid> / .e<jobid>); 5+ digits so CESM case names like b.e21.* aren't caught
+*.o[0-9][0-9][0-9][0-9][0-9]*
+*.e[0-9][0-9][0-9][0-9][0-9]*

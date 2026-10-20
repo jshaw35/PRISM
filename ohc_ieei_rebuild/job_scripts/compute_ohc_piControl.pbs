@@ -11,5 +11,5 @@
 # Activate the conda environment built from ../environment.yml, e.g.:
 #   conda activate /glade/work/$USER/conda-envs/ohc_ieei_rebuild
 
-cd "$(dirname "$0")/.."
+cd /glade/work/wkamp/GEO/PRISM/PRISM/ohc_ieei_rebuild
 python run_ohc_piControl.py

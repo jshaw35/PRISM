@@ -10,7 +10,7 @@ the full list of decisions this build makes.
 # (e.g. era5_atm/cdo_daily.sh) — confirm it is still the right account to
 # charge before submitting a long-running job.
 GLADE_USERNAME = "wkamp"
-PBS_PROJECT_ACCOUNT = "UCUB0144"
+PBS_PROJECT_ACCOUNT = "UCUB0207"
 
 # Where output NetCDF files are written.
 OUTPUT_ROOT = f"/glade/work/{GLADE_USERNAME}/GEO/PRISM/PRISM/ohc_ieei_rebuild/"
@@ -23,6 +23,8 @@ CASE_STR = "b.e21.BW1850.f09_g17.CMIP6-piControl.001"
 CASE_ROOT = f"/glade/campaign/collections/cmip/CMIP6/timeseries-cmip6/{CASE_STR}/"
 OCN_TSERIES_DIR = CASE_ROOT + "ocn/proc/tseries/month_1/"
 ATM_TSERIES_DIR = CASE_ROOT + "atm/proc/tseries/month_1/"
+ICE_TSERIES_DIR = CASE_ROOT + "ice/proc/tseries/month_1/"
+LND_TSERIES_DIR = CASE_ROOT + "lnd/proc/tseries/month_1/"
 
 TEMP_FILE_GLOB = f"{CASE_STR}.pop.h.TEMP.*.nc"
 FSNT_FILE_GLOB = f"{CASE_STR}.cam.h0.FSNT.*.nc"

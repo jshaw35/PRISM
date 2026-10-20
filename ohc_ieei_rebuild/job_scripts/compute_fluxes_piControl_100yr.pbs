@@ -1,0 +1,17 @@
+#!/bin/bash -l
+#PBS -N fluxes_picontrol_100yr
+#PBS -A UCUB0207
+#PBS -l select=1:ncpus=4:mem=32GB
+#PBS -l walltime=00:05:00
+#PBS -q casper
+#PBS -j oe
+
+# Computes global heat-budget flux terms (ocean, sea ice, land, atmosphere)
+# for the first 100 years (year 1 through year 100, inclusive) of the 1850
+# piControl run. See ../README.md before first use.
+
+module load conda
+conda activate /glade/work/wkamp/conda-envs/wk_MHWs
+
+cd /glade/work/wkamp/GEO/PRISM/PRISM/ohc_ieei_rebuild
+python run_fluxes_piControl.py --start-year 1 --end-year 100

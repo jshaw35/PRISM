@@ -28,10 +28,14 @@ def main(start_year=None, end_year=None):
     temp_files = find_temp_files()
     ds = open_ocean_dataset(temp_files, grid_path=config.OCN_GRID_FILE, chunks={"time": 24})
     ds = shift_noleap_time_back_one_month(ds)
+    # Dataset.where(cond, drop=True) broadcasts every variable against cond's
+    # dimension, even ones (TAREA, KMT, ...) that don't have a time dimension
+    # at all -- silently turning TAREA into (time, nlat, nlon). isel() with a
+    # boolean mask only touches variables that already have "time".
     if start_year is not None:
-        ds = ds.where(ds["time"].dt.year >= start_year, drop=True)
+        ds = ds.isel(time=(ds["time"].dt.year >= start_year).values)
     if end_year is not None:
-        ds = ds.where(ds["time"].dt.year <= end_year, drop=True)
+        ds = ds.isel(time=(ds["time"].dt.year <= end_year).values)
 
     ohc_ds = compute_ohc(ds)
     ohc_ds.attrs["case"] = config.CASE_STR

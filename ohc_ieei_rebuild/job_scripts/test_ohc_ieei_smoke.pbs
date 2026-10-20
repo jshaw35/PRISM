@@ -1,6 +1,6 @@
 #!/bin/bash -l
 #PBS -N ohc_ieei_smoke_test
-#PBS -A UCUB0144
+#PBS -A UCUB0207
 #PBS -l select=1:ncpus=1:mem=20GB
 #PBS -l walltime=00:20:00
 #PBS -q casper
@@ -14,5 +14,5 @@
 module load conda
 conda activate /glade/work/wkamp/conda-envs/wk_MHWs
 
-cd "$(dirname "$0")/.."
+cd /glade/work/wkamp/GEO/PRISM/PRISM/ohc_ieei_rebuild
 python test_pipeline_smoke.py
