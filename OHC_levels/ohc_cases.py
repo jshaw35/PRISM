@@ -81,10 +81,11 @@ def load_case_total(files, case=""):
 
 
 def annual_mean(total):
-    """Annual means over complete (12-month) years only, dims (ohc_depth, year)."""
+    """Month-length-weighted annual means over complete (12-month) years only (the `time` dim becomes `year`)."""
     counts = total["time"].dt.year.to_series().value_counts()
     full_years = counts[counts == 12].index
-    annual = total.groupby("time.year").mean()
+    days = total["time"].dt.days_in_month
+    annual = (total * days).groupby("time.year").sum() / days.groupby("time.year").sum()
     return annual.sel(year=sorted(full_years))
 
 
@@ -226,13 +227,16 @@ def plot_family(ax, experiments, family, per_year=False, reference_year=None):
     return ax
 
 
-def plot_layers(ax, da, family, experiment):
+def plot_layers(ax, da, family, experiment, title=None, legend=True, pad_xlim=True):
     """Total OHC change of one experiment with the change in each depth layer shaded beneath it.
 
     da: (member, ohc_depth, year), as returned by load_experiments(depth=None). Ensembles show the member mean
     (total and layers); the members' min-max range of the total is drawn as thin lines over the years every member
     covers, and the mean continues thinner where only some members run on. Layers gaining heat stack upward from
     zero and layers losing heat stack downward, so the total equals the shaded area above zero minus that below.
+
+    title: replaces the default "family: experiment (n members)" title. legend=False and pad_xlim=False are for
+    panels in a shared-axis grid (one legend for the figure; x-limits set once by the caller).
     """
     from matplotlib.lines import Line2D
     from matplotlib.patches import Patch
@@ -267,8 +271,9 @@ def plot_layers(ax, da, family, experiment):
     handles += [Patch(color=c, label=l) for l, c in zip(LAYERS, LAYER_COLORS)]
 
     ax.axhline(0, color=AXIS, lw=0.8)
-    x_lo, x_hi = ax.get_xlim()
-    ax.set_xlim(x_lo, x_hi + 0.1 * (x_hi - x_lo))
+    if pad_xlim:
+        x_lo, x_hi = ax.get_xlim()
+        ax.set_xlim(x_lo, x_hi + 0.1 * (x_hi - x_lo))
     if tail.size:
         k_first, k_last = count[tail[0]], count[tail[-1]]
         members = f"{k_first}" if k_first == k_last else f"{k_first}, then {k_last},"
@@ -280,12 +285,13 @@ def plot_layers(ax, da, family, experiment):
                     color=MUTED, fontsize=8.5)
     last = np.flatnonzero(np.isfinite(mean_total))[-1]
     ax.annotate(f" {mean_total[last]:+.0f} ZJ", xy=(year[last], mean_total[last]), va="center", color=INK2, fontsize=9)
-    ax.legend(handles=handles, loc="upper left", fontsize=8.5)
+    if legend:
+        ax.legend(handles=handles, loc="upper left", fontsize=8.5)
     runs = "1 run" if n == 1 else f"{n} members"
-    ax.set(title=f"{family}: {experiment_label(experiment)} ({runs})",
+    ax.set(title=title or f"{family}: {experiment_label(experiment)} ({runs})",
            xlabel="Year" if not family.endswith(("1850control", "LME")) else "Model year",
-           ylabel="OHC change since first year [ZJ]")
-    return ax
+           ylabel=f"OHC change since {int(year[0])} [ZJ]")
+    return handles
 
 
 # --- Spatial maps of OHC change ----------------------------------------------------------------------------------
@@ -505,3 +511,540 @@ def plot_difference_panels(fig, axes, diffs, regridder, layer="total", vmax=None
     baseline = next(iter(diffs.values())).attrs["baseline"]
     _style_colorbar(cbar, f"OHC change, {layer}, relative to {baseline} [GJ m⁻²]")
     return filled
+
+
+# --- Surface temperature and cross-experiment summary figures -----------------------------------------------------
+
+ATM_TSERIES_ROOT = PRISM_DATA + "spatial_averages_data/"
+
+
+def _shift_back_one_month(times):
+    """CESM stamps each monthly mean at the end of its averaging period (January's mean is labeled 1 February);
+    relabel each stamp with the first day of the month the data describe."""
+    out = []
+    for t in times:
+        year, month = (t.year, t.month - 1) if t.month > 1 else (t.year - 1, 12)
+        out.append(type(t)(year, month, 1))
+    return np.array(out)
+
+
+def load_case_ts(family, case, root=ATM_TSERIES_ROOT, var="TS", region="G"):
+    """Monthly global-mean surface temperature [K] for one case from PRISM's spatial-average files.
+
+    The files use CESM's end-of-period time stamps, so they are shifted back one month (the record must then start
+    in January). The ARISE-1.0 yearly files repeat the month at each file boundary; the repeats are checked to hold
+    the same values before one copy is kept.
+    """
+    pattern = os.path.join(root, family, "**", f"*{case}.cam.h0.{var}.*.nc")  # exact ".TS." (not e.g. "TSMLT")
+    files = sorted(glob.glob(pattern, recursive=True))
+    if not files:
+        raise FileNotFoundError(f"no {var} files match {pattern}")
+    da = xr.concat([xr.open_dataset(f, use_cftime=True)[var].sel(spatial=region, drop=True).load() for f in files],
+                   dim="time")
+    keys = np.array([t.year * 12 + t.month for t in da["time"].values])
+    order = np.argsort(keys, kind="stable")
+    da, keys = da.isel(time=order), keys[order]
+    repeats = np.flatnonzero(np.diff(keys) == 0)
+    if repeats.size and not np.allclose(da.values[repeats], da.values[repeats + 1]):
+        raise ValueError(f"{case}: files repeat months with different {var} values")
+    da = da.isel(time=np.r_[0, np.flatnonzero(np.diff(keys) != 0) + 1])
+    da = da.assign_coords(time=_shift_back_one_month(da["time"].values))
+    _check_monthly_axis(case, da["time"])
+    if da["time"].values[0].month != 1:
+        raise ValueError(f"{case}: after the end-of-period shift the record starts in month "
+                         f"{da['time'].values[0].month}, not January -- check the time-stamp convention")
+    return da
+
+
+def load_experiment_ts(cases, experiments, key, root=ATM_TSERIES_ROOT):
+    """Month-length-weighted annual global-mean surface temperature [K], (member, year), for the same members
+    load_experiments kept for this experiment."""
+    family, experiment = key
+    members = experiments[key]["member"].values
+    rows = cases[(cases.family == family) & (cases.experiment == experiment) & cases.member.isin(members)]
+    annual = [annual_mean(load_case_ts(family, row.case, root)).expand_dims(member=[row.member])
+              for row in rows.itertuples()]
+    da = xr.concat(annual, dim="member", join="outer")
+    da.attrs = dict(units="K", long_name="Annual global-mean surface temperature")
+    return da
+
+
+def change_since(da, start, end):
+    """Years start..end of `da` (any dims including member and year), relative to each member's value in `start`,
+    so every member starts at 0. Every member must cover the whole period."""
+    sub = da.sel(year=slice(start, end))
+    if sub.sizes["year"] == 0 or int(sub["year"][0]) != start or int(sub["year"][-1]) != end:
+        raise ValueError(f"data cover {int(da.year[0])}–{int(da.year[-1])}, not all of {start}–{end}")
+    if bool(sub.isnull().any()):
+        raise ValueError(f"not every member covers {start}–{end}")
+    return sub - sub.sel(year=start)
+
+
+def plot_layer_grid(fig, axes, items, start, end):
+    """Stacked-layer OHC panels (plot_layers) on shared axes, one per condition, with one legend for the figure.
+    items: [(name, (family, experiment), da (member, ohc_depth, year) already relative to `start`), ...]."""
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
+
+    flat = np.ravel(axes)
+    for ax, (name, (family, experiment), da) in zip(flat, items):
+        n = da.sizes["member"]
+        runs = "1 run" if n == 1 else f"mean of {n} members"
+        plot_layers(ax, da, family, experiment, title=name, legend=False, pad_xlim=False)
+        ax.set_title(name, pad=16)
+        ax.text(0, 1.012, f"{experiment_label(experiment)} · {runs}", transform=ax.transAxes, va="bottom",
+                color=INK2, fontsize=8.5)
+    for ax in flat[len(items):]:
+        ax.set_visible(False)
+    flat[0].set_xlim(start, end + 0.16 * (end - start))  # shared x: room for the end labels
+    for ax in flat[:len(items)]:
+        ax.label_outer()
+    handles = [Line2D([], [], color=INK, lw=2.2, label="total (ensemble mean for ensembles)")]
+    if any(da.sizes["member"] > 1 for _, _, da in items):
+        handles.append(Line2D([], [], color=MUTED, lw=0.8, label="total, member min–max"))
+    handles += [Patch(color=c, label=l) for l, c in zip(LAYERS, LAYER_COLORS)]
+    fig.legend(handles=handles, loc="outside lower center", ncol=len(handles), fontsize=9)
+
+
+def window_means(series, start, end, window=10):
+    """Mean of a (year) series over start..end, and over consecutive non-overlapping `window`-year windows
+    starting at `start` (a final partial window is left out): (period_mean, [((first, last), mean), ...])."""
+    period = float(series.sel(year=slice(start, end)).mean())
+    windows = [(y, y + window - 1) for y in range(start, end + 1, window) if y + window - 1 <= end]
+    return period, [(w, float(series.sel(year=slice(*w)).mean())) for w in windows]
+
+
+
+class _LabelSpace:
+    """Free-space bookkeeping for direct labels on one axes, in points (1/72 in). Obstacles are boxes: markers,
+    sampled line segments, legends, text already placed. A label is only put where its box clears every obstacle
+    and stays inside the axes."""
+
+    def __init__(self, ax):
+        ax.figure.canvas.draw()  # settle limits and layout so data -> screen positions are final
+        self.ax = ax
+        self.to_points = 72.0 / ax.figure.dpi
+        self.renderer = ax.figure.canvas.get_renderer()
+        b = ax.get_window_extent(self.renderer)
+        self.bounds = tuple(v * self.to_points for v in (b.x0, b.y0, b.x1, b.y1))
+        self.boxes = []  # (x0, y0, width, height)
+        self.texts = []  # boxes of placed labels only, for leader checks
+        self.leaders = []  # ((x0, y0), (x1, y1)) leader lines already drawn
+
+    def screen(self, x, y):
+        return tuple(self.ax.transData.transform((x, y)) * self.to_points)
+
+    def add_markers(self, xs, ys, size):
+        """Scatter markers of area `size` (points^2) at data positions xs, ys."""
+        half = 0.5 * np.sqrt(size) + 1.0
+        for x, y in zip(np.atleast_1d(xs), np.atleast_1d(ys)):
+            px, py = self.screen(x, y)
+            self.boxes.append((px - half, py - half, 2 * half, 2 * half))
+
+    def add_line(self, xs, ys, half=1.5, step=3.0):
+        """A polyline through data points xs, ys, sampled every `step` points along its screen length."""
+        pts = np.array([self.screen(x, y) for x, y in zip(xs, ys)])
+        for (x0, y0), (x1, y1) in zip(pts[:-1], pts[1:]):
+            n = max(2, int(np.hypot(x1 - x0, y1 - y0) / step) + 1)
+            for t in np.linspace(0, 1, n):
+                px, py = x0 + t * (x1 - x0), y0 + t * (y1 - y0)
+                self.boxes.append((px - half, py - half, 2 * half, 2 * half))
+
+    def add_artist(self, artist):
+        b = artist.get_window_extent(self.renderer)
+        self.boxes.append((b.x0 * self.to_points, b.y0 * self.to_points,
+                           b.width * self.to_points, b.height * self.to_points))
+
+    def clear(self, x0, y0, width, height):
+        bx0, by0, bx1, by1 = self.bounds
+        inside = bx0 <= x0 and x0 + width <= bx1 and by0 <= y0 and y0 + height <= by1
+        return inside and not any(x0 < bx + bw and bx < x0 + width and y0 < by + bh and by < y0 + height
+                                  for bx, by, bw, bh in self.boxes)
+
+    def leader_clear(self, start, box):
+        """True if a leader from `start` to the edge of label `box` crosses no other leader and no other label."""
+        x0, y0, w, h = box
+        end = (min(max(start[0], x0), x0 + w), min(max(start[1], y0), y0 + h))  # nearest point of the box
+        n = max(2, int(np.hypot(end[0] - start[0], end[1] - start[1]) / 2.0))
+        for t in np.linspace(0, 1, n)[1:-1]:
+            px, py = start[0] + t * (end[0] - start[0]), start[1] + t * (end[1] - start[1])
+            if any(bx < px < bx + bw and by < py < by + bh for bx, by, bw, bh in self.texts):
+                return False
+
+        def ccw(a, b, c):
+            return (c[1] - a[1]) * (b[0] - a[0]) - (b[1] - a[1]) * (c[0] - a[0])
+
+        for a, b in self.leaders:
+            if (ccw(start, end, a) * ccw(start, end, b) < 0) and (ccw(a, b, start) * ccw(a, b, end) < 0):
+                return False
+        return True
+
+    def add_label(self, box, leader_start=None):
+        """Record a placed label (and its leader, if any). Returns the leader's attachment point on the label as
+        a fraction of the box, for annotate's arrowprops relpos, so the drawn leader is the one that was checked."""
+        self.boxes.append(box)
+        self.texts.append(box)
+        if leader_start is None:
+            return None
+        x0, y0, w, h = box
+        end = (min(max(leader_start[0], x0), x0 + w), min(max(leader_start[1], y0), y0 + h))
+        self.leaders.append((leader_start, end))
+        return ((end[0] - x0) / w, (end[1] - y0) / h)
+
+    @staticmethod
+    def size(text, fontsize, bold=False):
+        return (0.62 if bold else 0.58) * fontsize * len(text), 1.25 * fontsize
+
+
+def end_periods(start, end, length=5):
+    """The first and last `length` years of start..end: (base, final), e.g. ((2035, 2039), (2065, 2069))."""
+    return (start, start + length - 1), (end - length + 1, end)
+
+
+def period_mean(da, years):
+    """Mean over the inclusive (first, last) year range of a (..., year) array."""
+    return da.sel(year=slice(*years)).mean("year")
+
+
+def period_difference(da, base, final):
+    """Mean over the `final` years minus mean over the `base` years (inclusive (first, last) ranges)."""
+    return period_mean(da, final) - period_mean(da, base)
+
+
+def _place_point_labels(ax, points, fontsize=9, gap=1.5, space=None):
+    """Label each (x, y, text) next to its point, clear of the obstacles in `space` (a _LabelSpace; by default
+    only the labeled points, as markers of area 190). Tries up-right, down-right, up-left and down-left of the
+    point, then the same four spots stepped further out, nearest first; a label stepped out gets a thin leader line
+    back to its point.
+    Returns the space, with the labels added as obstacles."""
+    if space is None:
+        space = _LabelSpace(ax)
+        space.add_markers([p[0] for p in points], [p[1] for p in points], 190)
+    for x, y, text in sorted(points, key=lambda p: -p[1]):
+        px, py = space.screen(x, y)
+        width, height = space.size(text, fontsize)
+        candidates = [(k, cx, cy) for k in range(40) for step in [k * (height + gap)]
+                      for cx, cy in ((9.0, 5.0 + step), (9.0, -5.0 - height - step),
+                                     (-9.0 - width, 5.0 + step), (-9.0 - width, -5.0 - height - step))]
+        k, dx, dy = next(((k, cx, cy) for k, cx, cy in candidates if space.clear(px + cx, py + cy, width, height)
+                          and (k == 0 or space.leader_clear((px, py), (px + cx, py + cy, width, height)))),
+                         candidates[0])
+        relpos = space.add_label((px + dx, py + dy, width, height), (px, py) if k > 0 else None)
+        ax.annotate(text, xy=(x, y), xytext=(dx, dy), textcoords="offset points", va="bottom", ha="left",
+                    color=INK2, fontsize=fontsize,
+                    arrowprops=dict(arrowstyle="-", color=MUTED, lw=0.6, shrinkA=0, shrinkB=6, relpos=relpos)
+                    if k > 0 else None)
+    return space
+
+
+def _place_line_label(ax, space, x_lo, x_hi, slope, intercept, text, fontsize=10, bold=False, others=(),
+                      fractions=(0.15, 0.25, 0.35, 0.5, 0.65, 0.75, 0.85), min_separation=14.0):
+    """Label the line y = slope * x + intercept (drawn over x_lo..x_hi) with a callout: the text sits in free space
+    above-left or below-right of the line, with a thin leader to an anchor on the line. Anchors are only taken where
+    every line in `others` ([(x_lo, x_hi, slope, intercept), ...]) is at least `min_separation` points away, so
+    the leader can only point at this line; nearer placements are tried first."""
+    width, height = space.size(text, fontsize, bold)
+
+    def far_from_others(px, py):
+        for lo, hi, m, c in others:
+            xs = np.linspace(lo, hi, 60)
+            pts = np.array([space.screen(xx, m * xx + c) for xx in xs])
+            if np.min(np.hypot(pts[:, 0] - px, pts[:, 1] - py)) < min_separation:
+                return False
+        return True
+
+    anchors = []
+    for frac in fractions:
+        x = x_lo + frac * (x_hi - x_lo)
+        px, py = space.screen(x, slope * x + intercept)
+        if far_from_others(px, py):
+            anchors.append((x, px, py))
+    for d in (10.0, 22.0, 36.0, 52.0, 70.0, 90.0):
+        for x, px, py in anchors:
+            for dx, dy in ((-d - width, d), (d, -d - height)):
+                box = (px + dx, py + dy, width, height)
+                if space.clear(*box) and space.leader_clear((px, py), box):
+                    relpos = space.add_label(box, (px, py))
+                    return ax.annotate(text, xy=(x, slope * x + intercept), xytext=(dx, dy),
+                                       textcoords="offset points", ha="left", va="bottom", color=INK2,
+                                       fontsize=fontsize, fontweight="bold" if bold else "normal",
+                                       arrowprops=dict(arrowstyle="-", color=MUTED, lw=0.7, shrinkA=1, shrinkB=0,
+                                                       relpos=relpos))
+    raise RuntimeError(f"no free spot for line label {text!r}")
+
+
+def plot_uptake_vs_warming(ax, items, start, end, window=10, styles=None, members=False, window_size=38,
+                           window_markers=None, base=None, final=None):
+    """Ensemble-mean surface-temperature change vs. ocean heat uptake, both measured from the mean over the `base`
+    years (default: the first 5 years of start..end).
+
+    items: [(name, ohc (member, year) [J], ts (member, year) [K]), ...], on any common zero point (it cancels).
+    The large point for each condition is the mean over the `final` years (default: the last 5) minus the mean
+    over the `base` years; the points of area `window_size` are the means over each consecutive `window`-year
+    window from `start`, minus the same base mean, joined in time order. Large points are labeled directly so identity never rests on
+    color alone. styles: optional {name: {"color": ..., "marker": ...}} so a condition looks the same in every
+    figure; by default conditions take palette slots in order, as circles.
+    window_markers: optional marker per window, in time order (e.g. ["^", "s", "D"]), so the windows are told
+    apart by shape; by default every point takes the condition's marker.
+    members: also plot each ensemble member's own final-minus-base difference and window means as small, faded,
+    unjoined points (area 38) in the same shape as the ensemble-mean point they belong to, and add the member
+    standard deviation of both quantities to the returned table.
+    """
+    from matplotlib.lines import Line2D
+
+    MEAN_SIZE, MEMBER_SIZE, MEMBER_ALPHA = 190, 38, 0.45
+    default_base, default_final = end_periods(start, end)
+    base, final = base or default_base, final or default_final
+    summary, labels, paths, member_xy = [], [], [], []
+    for slot, (name, ohc, ts) in enumerate(items):
+        style = (styles or {}).get(name, {})
+        color, marker = style.get("color", PALETTE[slot % len(PALETTE)]), style.get("marker", "o")
+        ohc = (ohc - period_mean(ohc, base)) / ZJ  # every quantity on this plot is measured from the base mean
+        ts = ts - period_mean(ts, base)
+        x_all = float(period_difference(ohc.mean("member"), base, final))
+        y_all = float(period_difference(ts.mean("member"), base, final))
+        x_win = window_means(ohc.mean("member"), start, end, window)[1]
+        y_win = window_means(ts.mean("member"), start, end, window)[1]
+        periods = [w for w, _ in x_win]
+        shapes = list(window_markers) if window_markers is not None else [marker] * len(periods)
+        if len(shapes) < len(periods):
+            raise ValueError(f"window_markers has {len(shapes)} markers for {len(periods)} windows")
+        xs, ys = [v for _, v in x_win], [v for _, v in y_win]
+        row = dict(condition=name, members=ohc.sizes["member"], ocean_heat_uptake_ZJ=x_all,
+                   surface_temperature_change_K=y_all)
+        if members:
+            for (a, b), shape in [(final, marker)] + list(zip(periods, shapes)):
+                mx = period_mean(ohc, (a, b)).values  # for `final` this is final minus base (ohc, ts are rebased)
+                my = period_mean(ts, (a, b)).values
+                ax.scatter(mx, my, s=MEMBER_SIZE, color=color, marker=shape, alpha=MEMBER_ALPHA, linewidths=0,
+                           zorder=1)
+                member_xy.append((mx, my))
+                suffix = "" if (a, b) == final else f"_{a}-{b}"
+                row.update({f"uptake_ZJ_member_sd{suffix}": float(np.std(mx, ddof=1)) if mx.size > 1 else np.nan,
+                            f"dTS_K_member_sd{suffix}": float(np.std(my, ddof=1)) if my.size > 1 else np.nan})
+        ax.plot(xs, ys, color=color, lw=1, zorder=2)
+        for x, y, shape in zip(xs, ys, shapes):
+            ax.scatter(x, y, s=window_size, color=color, marker=shape, edgecolors=SURFACE, linewidths=1.5, zorder=3)
+        ax.scatter(x_all, y_all, s=MEAN_SIZE, color=color, marker=marker, edgecolors=SURFACE, linewidths=2, zorder=4,
+                   label=name)
+        labels.append((x_all, y_all, name))
+        paths.append((xs, ys))
+        row.update({f"uptake_ZJ_{a}-{b}": v for (a, b), v in x_win})
+        row.update({f"dTS_K_{a}-{b}": v for (a, b), v in y_win})
+        summary.append(row)
+    ax.axhline(0, color=AXIS, lw=0.8)
+    ax.axvline(0, color=AXIS, lw=0.8)
+    mean_word = "ensemble mean" if members else "mean"
+    key = [Line2D([], [], ls="", marker="o", ms=np.sqrt(MEAN_SIZE), color=MUTED, mec=SURFACE,
+                  label=f"{final[0]}–{final[1]} {mean_word} minus {base[0]}–{base[1]} {mean_word}")]
+    if window_markers is not None:
+        key += [Line2D([], [], ls="-", lw=1, marker=shape, ms=np.sqrt(window_size), color=MUTED, mec=SURFACE,
+                       label=f"{a}–{b} {mean_word}") for (a, b), shape in zip(periods, shapes)]
+    else:
+        windows = ", ".join(f"{a}–{b}" for a, b in periods)
+        key.append(Line2D([], [], ls="-", lw=1, marker="o", ms=np.sqrt(window_size), color=MUTED, mec=SURFACE,
+                          label=f"{window}-year {mean_word}s ({windows})"))
+    if members:
+        key.append(Line2D([], [], ls="", marker="o", ms=np.sqrt(MEMBER_SIZE), color=MUTED, alpha=MEMBER_ALPHA,
+                          mew=0, label="one ensemble member (faded; same shape as its ensemble mean)"))
+    first_legend = ax.legend(loc="upper left", fontsize=9, title="Condition", title_fontsize=9)
+    ax.add_artist(first_legend)
+    key_legend = ax.legend(handles=key, loc="lower right", fontsize=9)
+    ax.set(xlabel=f"Ocean heat uptake from the {base[0]}–{base[1]} mean [ZJ]",
+           ylabel=f"Surface temperature change from the {base[0]}–{base[1]} mean [K]")
+
+    space = _LabelSpace(ax)
+    space.add_markers([p[0] for p in labels], [p[1] for p in labels], MEAN_SIZE)
+    for xs, ys in paths:
+        space.add_markers(xs, ys, window_size)
+        space.add_line(xs, ys)
+    for mx, my in member_xy:
+        space.add_markers(mx, my, MEMBER_SIZE)
+    space.add_artist(first_legend)
+    space.add_artist(key_legend)
+    _place_point_labels(ax, labels, space=space)
+    return pd.DataFrame(summary).set_index("condition")
+
+
+def rolling_slope(da, window=5):
+    """Least-squares slope (per year) of `da` over the `window` years centered on each year (window must be odd).
+    Years without a full window at either end are dropped. Needs consecutive annual years. For equally spaced
+    years the OLS slope is a fixed weighted sum, sum_k (k - kbar) y_k / sum_k (k - kbar)^2, applied here as a
+    rolling dot product; being linear, the slope of an ensemble mean equals the mean of the member slopes."""
+    if window % 2 != 1:
+        raise ValueError(f"window must be odd so it centers on a year, got {window}")
+    years = da["year"].values
+    if not (np.diff(years) == 1).all():
+        raise ValueError("rolling_slope needs consecutive annual years")
+    offsets = np.arange(window) - window // 2
+    weights = xr.DataArray(offsets / (offsets ** 2).sum(), dims="window")
+    windows = da.rolling(year=window, center=True).construct("window")
+    half = window // 2
+    return (windows * weights).sum("window", skipna=False).isel(year=slice(half, -half))
+
+
+def plot_annual_paths(fig, axes, items, start, end, cmap="viridis", rate_window=None):
+    """One panel per condition: annual surface-temperature change vs. ocean heat uptake, both since `start`.
+    The ensemble-mean year-by-year points are colored by year (one colorbar shared by every panel); each member's
+    own annual path is a thin, semi-transparent line in one neutral color behind them (no lines for a single-run
+    condition, whose points are the run itself).
+    items: [(name, ohc_change (member, year) [J], ts_change (member, year) [K]), ...] with change_since-style
+    data (0 at `start`).
+    rate_window: plot rates instead of totals: each year's least-squares slope over the `rate_window` years
+    centered on it (rolling_slope), as ocean heat uptake rate [ZJ/yr] vs. surface warming rate [K/decade]; the
+    first and last rate_window // 2 years have no full window and are left out. Colors keep the start..end scale,
+    so a year has the same color as in the totals figure. Returns the colorbar."""
+    from matplotlib.colors import Normalize
+    from matplotlib.lines import Line2D
+
+    norm = Normalize(start, end)
+    any_ensemble = False
+    for ax, (name, ohc, ts) in zip(np.ravel(axes), items):
+        ohc = ohc.sel(year=slice(start, end)) / ZJ
+        ts = ts.sel(year=slice(start, end))
+        assert (ohc["year"].values == ts["year"].values).all(), f"{name}: OHC and TS years differ"
+        if rate_window:
+            ohc, ts = rolling_slope(ohc, rate_window), 10 * rolling_slope(ts, rate_window)  # ZJ/yr, K/decade
+        n = ohc.sizes["member"]
+        any_ensemble |= n > 1
+        for m in range(n if n > 1 else 0):
+            ax.plot(ohc.isel(member=m), ts.isel(member=m), color=MUTED, lw=0.7, alpha=0.45, zorder=1)
+        points = ax.scatter(ohc.mean("member"), ts.mean("member"), c=ohc["year"], cmap=cmap, norm=norm, s=30,
+                            edgecolors=SURFACE, linewidths=0.6, zorder=3)
+        ax.axhline(0, color=AXIS, lw=0.8)
+        ax.axvline(0, color=AXIS, lw=0.8)
+        ax.set_title(f"{name} (mean of {n})" if n > 1 else name, loc="left", fontweight="bold")
+        if rate_window:
+            ax.set(xlabel="Ocean heat uptake rate [ZJ/yr]", ylabel="Surface warming rate [K/decade]")
+        else:
+            ax.set(xlabel=f"Ocean heat uptake since {start} [ZJ]",
+                   ylabel=f"Surface temperature change since {start} [K]")
+        ax.label_outer()
+    what = f"{rate_window}-year centered trend" if rate_window else "annual value"
+    sizes = {it[1].sizes["member"] for it in items}
+    mean_word = "ensemble mean" if min(sizes) > 1 else ("ensemble mean (or the single run)" if max(sizes) > 1
+                                                         else "single run")
+    handles = [Line2D([], [], ls="", marker="o", ms=6, color=MUTED, mec=SURFACE,
+                      label=f"{mean_word}, one point per year: {what} (color = year)")]
+    if any_ensemble:
+        handles.append(Line2D([], [], color=MUTED, lw=0.7, alpha=0.45, label="one ensemble member, year-by-year path"))
+    fig.legend(handles=handles, loc="outside lower center", ncol=len(handles), fontsize=9)
+    return fig.colorbar(points, ax=axes, label="Year", pad=0.01, fraction=0.025)
+
+
+def _spread(values, gap):
+    """Positions for labels at `values` that are at least `gap` apart, each as close to its value as possible."""
+    order = np.argsort(values)
+    pos = np.asarray(values, dtype=float)[order]
+    for _ in range(100):  # push overlapping neighbours apart symmetrically until none overlap
+        moved = False
+        for i in range(1, pos.size):
+            overlap = gap - (pos[i] - pos[i - 1])
+            if overlap > 1e-9:
+                pos[i - 1] -= overlap / 2
+                pos[i] += overlap / 2
+                moved = True
+        if not moved:
+            break
+    out = np.empty_like(pos)
+    out[order] = pos
+    return out
+
+
+def plot_total_comparison(ax, items, start, end):
+    """Ensemble-mean total OHC change since `start` for several conditions on one axes, each labeled at its line
+    end (labels are spread apart where lines end close together, with a leader line back to the line).
+    items: [(name, change (member, year) [J], {"color": ..., "linestyle": ...}), ...]."""
+    ends = []
+    for name, change, style in items:
+        n = change.sizes["member"]
+        mean = change.mean("member") / ZJ
+        ax.plot(mean["year"], mean, color=style["color"], ls=style.get("linestyle", "-"), lw=2,
+                label=name if n == 1 else f"{name} (mean of {n})")
+        ends.append((float(mean[-1]), f"{name}  {float(mean[-1]):+.0f} ZJ"))
+    ax.axhline(0, color=AXIS, lw=0.8)
+    ax.set_xlim(start, end + 0.32 * (end - start))
+    y_lo, y_hi = ax.get_ylim()
+    label_y = _spread([y for y, _ in ends], gap=0.042 * (y_hi - y_lo))
+    for (y, text), y_text in zip(ends, label_y):
+        ax.annotate(text, xy=(end, y), xytext=(end + 0.03 * (end - start), y_text), va="center", ha="left",
+                    color=INK2, fontsize=9,
+                    arrowprops=dict(arrowstyle="-", color=MUTED, lw=0.6, shrinkA=0, shrinkB=2))
+    ax.set(xlabel="Year", ylabel=f"OHC change since {start} [ZJ]")
+
+
+def _fit(x, y):
+    slope, intercept = np.polyfit(x, y, 1)
+    return dict(slope_K_per_ZJ=float(slope), intercept_K=float(intercept),
+                r2=float(np.corrcoef(x, y)[0, 1] ** 2), n=len(x), x_min=float(np.min(x)), x_max=float(np.max(x)))
+
+
+def plot_period_mean_regression(ax, items, start, end, family_markers=None, family_fits=None, base=None, final=None):
+    """Each condition's ensemble-mean surface-temperature change vs. ocean heat uptake, both the mean over the
+    `final` years minus the mean over the `base` years (defaults: the last and first 5 years of start..end), with a dashed least-squares line through all the points and, for each group in
+    `family_fits`, a thinner dashed line through that group's points alone. Every line is labeled on the plot with
+    its r² and intercept, and listed in the legend with its slope, intercept and r².
+    items: [(name, ohc_change (member, year) [J], ts_change (member, year) [K], {"color", "marker"}), ...].
+    family_markers: optional {legend label: marker} explaining what the marker shapes mean.
+    family_fits: optional {short name: marker}; fits the points drawn with that marker separately.
+    Returns (points DataFrame, fits DataFrame indexed by fit name: slope [K per ZJ], intercept [K], r2, n, x range)."""
+    from matplotlib.lines import Line2D
+
+    MEAN_SIZE = 190
+    default_base, default_final = end_periods(start, end)
+    base, final = base or default_base, final or default_final
+    rows = []
+    for name, ohc, ts, style in items:
+        x = float(period_difference(ohc.mean("member"), base, final)) / ZJ
+        y = float(period_difference(ts.mean("member"), base, final))
+        marker = style.get("marker", "o")
+        ax.scatter(x, y, s=MEAN_SIZE, color=style["color"], marker=marker, edgecolors=SURFACE, linewidths=2,
+                   zorder=4)
+        rows.append(dict(condition=name, marker=marker, members=ohc.sizes["member"], ocean_heat_uptake_ZJ=x,
+                         surface_temperature_change_K=y))
+    points = pd.DataFrame(rows).set_index("condition")
+    X, Y = "ocean_heat_uptake_ZJ", "surface_temperature_change_K"
+
+    groups = [(f"all {len(points)} conditions", points, dict(ls="--", lw=1.6))]
+    thin_dashes = [(0, (2.5, 2)), (0, (8, 3))]  # short dashes for the first family, long for the second
+    for (short, marker), dashes in zip((family_fits or {}).items(), thin_dashes):
+        sub = points[points["marker"] == marker]
+        if len(sub) < 3:
+            raise ValueError(f"{short}: {len(sub)} points; need at least 3 for a meaningful fit and r²")
+        groups.append((f"{short} ({len(sub)} conditions)", sub, dict(ls=dashes, lw=0.9)))
+
+    fits, lines, handles = {}, [], []
+    for label, sub, line_style in groups:
+        f = _fit(sub[X].values, sub[Y].values)
+        fits[label] = f
+        xx = np.array([f["x_min"], f["x_max"]])
+        ax.plot(xx, f["slope_K_per_ZJ"] * xx + f["intercept_K"], color=INK2, zorder=3, **line_style)
+        lines.append((label, f))
+        handles.append(Line2D([], [], color=INK2, **line_style,
+                              label=f"fit, {label}: slope {100 * f['slope_K_per_ZJ']:+.2f} K per 100 ZJ, "
+                                    f"intercept {f['intercept_K']:+.2f} K, r² = {f['r2']:.2f}"))
+    ax.axhline(0, color=AXIS, lw=0.8)
+    ax.axvline(0, color=AXIS, lw=0.8)
+    shapes = [Line2D([], [], ls="", marker=m, ms=11, color=MUTED, mec=SURFACE, label=lbl)
+              for lbl, m in (family_markers or {}).items()]
+    legend = ax.legend(handles=shapes + handles, loc="upper left", fontsize=8.5)
+    ax.set(xlabel=f"Ocean heat uptake, {final[0]}–{final[1]} minus {base[0]}–{base[1]} mean [ZJ]",
+           ylabel=f"Surface temperature change, {final[0]}–{final[1]} minus {base[0]}–{base[1]} mean [K]")
+
+    # Direct labels: point names first, then one label per fit line, all clear of markers, lines and the legend
+    space = _LabelSpace(ax)
+    space.add_markers(points[X].values, points[Y].values, MEAN_SIZE)
+    for _, f in lines:
+        xx = np.array([f["x_min"], f["x_max"]])
+        space.add_line(xx, f["slope_K_per_ZJ"] * xx + f["intercept_K"])
+    space.add_artist(legend)
+    _place_point_labels(ax, list(zip(points[X], points[Y], points.index)), space=space)
+    segments = [(f["x_min"], f["x_max"], f["slope_K_per_ZJ"], f["intercept_K"]) for _, f in lines]
+    # the all-conditions fit usually lies between the family fits, so label the family fits first: their free side
+    # is open, and the all-conditions callout then routes around them
+    for i, (label, f) in sorted(enumerate(lines), key=lambda item: item[0] == 0):
+        name = label.split(" (")[0]
+        _place_line_label(ax, space, *segments[i], f"{name} fit: r² = {f['r2']:.2f}, intercept {f['intercept_K']:+.2f} K",
+                          fontsize=10 if i == 0 else 9, bold=(i == 0), others=segments[:i] + segments[i + 1:])
+    return points.drop(columns="marker"), pd.DataFrame(fits).T.astype({"n": int})
+
