@@ -444,6 +444,157 @@ def plot_change_map(ax, change, regridder, family, experiment, layer="total", vm
     return filled
 
 
+# --- Zonal (latitude-band) totals of OHC change ------------------------------------------------------------------
+
+LAT_EDGES_5 = np.arange(-90, 91, 5)
+
+
+def ocean_cell_area_m2(root=OHC_TSERIES_ROOT):
+    """POP T-cell area [m^2] (the ancillary TAREA is in cm^2), NaN over land, with TLAT/TLONG as coordinates.
+    Its ocean sum equals the ocean_area_m2 attribute of the OHC files."""
+    anc = xr.open_dataset(os.path.join(root, "ancillary_files", "ohc_ancillary_data.nc"))
+    area = (anc["TAREA"] * 1e-4).where(anc["KMT"] > 0).load()
+    anc.close()
+    area.attrs = dict(units="m2", long_name="ocean T-cell area")
+    return area
+
+
+def latitude_band_sums(field, area_m2, edges=LAT_EDGES_5):
+    """Area integral of a per-m^2 `field` (dims (..., nlat, nlon), on the POP T-grid) over the ocean cells whose
+    T-point latitude lies in each band [edges[i], edges[i+1]). Binning on the native grid by each cell's own
+    latitude (no regridding), so the bands sum exactly to the global integral. Returns (..., lat), with lat the band
+    centers and the edges in attrs["lat_edges"]; a band with no ocean is 0."""
+    edges = np.asarray(edges, dtype=float)
+    ocean = area_m2.notnull().values
+    field = field.transpose(..., "nlat", "nlon")
+    if bool(field.isnull().values[..., ocean].any()):
+        raise ValueError("field is missing values in ocean cells")
+    band = np.digitize(area_m2["TLAT"].values, edges) - 1
+    if not ((band[ocean] >= 0) & (band[ocean] < edges.size - 1)).all():
+        raise ValueError(f"ocean cells lie outside the band edges {edges[0]}..{edges[-1]}")
+    weighted = (field * area_m2).values  # NaN over land
+    sums = np.stack([weighted[..., ocean & (band == b)].sum(axis=-1) for b in range(edges.size - 1)], axis=-1)
+    lead = field.dims[:-2]
+    return xr.DataArray(sums, dims=(*lead, "lat"),
+                        coords={**{d: field[d] for d in lead if d in field.coords}, "lat": 0.5 * (edges[:-1] + edges[1:])},
+                        attrs=dict(lat_edges=edges))
+
+
+def zonal_band_change(cases, experiments, key, base, final, edges=LAT_EDGES_5, area_m2=None, rtol=1e-5):
+    """OHC change [J] in each latitude band, for every member that load_experiments kept for this experiment: the
+    month-length-weighted mean over the `final` years minus the mean over the `base` years (inclusive (first, last)
+    ranges; (2035, 2035) and (2069, 2069) give the annual-mean difference plotted by change_since), by depth bin.
+    Returns DataArray (member, ohc_depth, lat) in J.
+
+    Each member's bands are checked to sum, in every depth bin, to the change in its OHC_global_mean * ocean_area_m2
+    over the same months (relative tolerance `rtol`); the largest relative mismatch is kept in
+    attrs["max_relative_mismatch"]."""
+    area_m2 = ocean_cell_area_m2() if area_m2 is None else area_m2
+    family, experiment = key
+    members = experiments[key]["member"].values
+    rows = cases[(cases.family == family) & (cases.experiment == experiment) & cases.member.isin(members)]
+    base_years, final_years = list(range(base[0], base[1] + 1)), list(range(final[0], final[1] + 1))
+    out, worst = [], 0.0
+    for row in rows.itertuples():
+        ds = xr.open_mfdataset(sorted(row.files), combine="by_coords", data_vars="minimal", coords="minimal",
+                               compat="override", use_cftime=True, chunks={"time": 12})
+        _check_monthly_axis(row.case, ds["time"])
+        ocean = area_m2.notnull().values  # compared over ocean only: the ARISE-1.0 files leave TLAT NaN over some land
+        if not np.allclose(ds["TLAT"].values[ocean], area_m2["TLAT"].values[ocean]):
+            raise ValueError(f"{row.case}: OHC grid differs from the ancillary grid")
+        change = (_window_mean(ds["OHC"], final_years, row.case) - _window_mean(ds["OHC"], base_years, row.case)).load()
+        gm = ds["OHC_global_mean"]
+        global_change = ((_window_mean(gm, final_years, row.case) - _window_mean(gm, base_years, row.case))
+                         * ds.attrs["ocean_area_m2"]).load()
+        ds.close()
+        bands = latitude_band_sums(change, area_m2, edges)
+        mismatch = float(np.max(np.abs(bands.sum("lat") - global_change) / np.abs(global_change)))
+        if mismatch > rtol:
+            raise ValueError(f"{row.case}: latitude bands sum to the global change only within {mismatch:.1e}")
+        worst = max(worst, mismatch)
+        out.append(bands.expand_dims(member=[row.member]))
+    da = xr.concat(out, dim="member")
+    da = da.assign_coords(ocean_area_m2=latitude_band_sums(xr.ones_like(area_m2), area_m2, edges))
+    da.attrs = dict(units="J", long_name="OHC change per latitude band", lat_edges=np.asarray(edges, dtype=float),
+                    base=base, final=final, max_relative_mismatch=worst)
+    return da
+
+
+def zonal_mean_per_area(da):
+    """Band totals [J] from zonal_band_change divided by each band's ocean area: the ocean-only zonal mean
+    [J m-2] (land is excluded because only ocean cells enter both sums). Bands with no ocean are NaN."""
+    area = da["ocean_area_m2"]
+    out = (da / area).where(area > 0)
+    out.attrs = {**da.attrs, "units": "J m-2", "long_name": "Ocean-mean OHC change per latitude band"}
+    return out
+
+
+def _lat_label(v):
+    return "EQ" if v == 0 else f"{abs(v):g}°{'N' if v > 0 else 'S'}"
+
+
+def plot_zonal_layer_grid(fig, axes, items, xlabel=None, per_area=False):
+    """plot_layer_grid turned on its side: one panel per condition, latitude on y and the OHC change in each
+    latitude band on x, with the change held in each depth layer as stacked horizontal bars (layers gaining heat
+    stack right of zero, layers losing heat left) and the band's total as a black step outline. Ensembles show the
+    member mean; thin gray outlines give the members' min-max of the band total. Panels share both axes.
+    items: [(name, (family, experiment), da (member, ohc_depth, lat) [J], from zonal_band_change), ...].
+    per_area: plot the ocean-only zonal mean [GJ m-2] (band total / band ocean area) instead of the band total [ZJ];
+    the corner note then gives the global ocean mean instead of the global total."""
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
+
+    scale, unit = (GJ, "GJ m⁻²") if per_area else (ZJ, "ZJ")
+    flat = np.ravel(axes)
+    for ax, (name, (family, experiment), da) in zip(flat, items):
+        edges = np.asarray(da.attrs["lat_edges"])
+        bottom, height = edges[:-1], np.diff(edges)
+        n = da.sizes["member"]
+        if per_area:
+            ocean = float(da["ocean_area_m2"].sum())
+            note = f"global ocean mean {float(da.sel(ohc_depth=-1).mean('member').sum('lat')) / ocean / GJ:+.2f} {unit}"
+            da = zonal_mean_per_area(da)
+        else:
+            note = f"global total {float(da.sel(ohc_depth=-1).mean('member').sum('lat')) / ZJ:+.0f} {unit}"
+        layers = layer_changes(da).mean("member") / scale
+        right, left = np.zeros(bottom.size), np.zeros(bottom.size)
+        for layer, color in zip(LAYERS, LAYER_COLORS):
+            v = np.nan_to_num(layers.sel(layer=layer).values)
+            pos, neg = np.clip(v, 0, None), np.clip(v, None, 0)
+            ax.barh(bottom, pos, height=height, left=right, align="edge", color=color, edgecolor=SURFACE, linewidth=0.4)
+            ax.barh(bottom, neg, height=height, left=left, align="edge", color=color, edgecolor=SURFACE, linewidth=0.4)
+            right, left = right + pos, left + neg
+        total = da.sel(ohc_depth=-1) / scale
+        if n > 1:
+            for stat in ("min", "max"):
+                ax.stairs(getattr(total, stat)("member").values, edges, orientation="horizontal", baseline=None,
+                          color=MUTED, lw=0.8)
+        ax.stairs(total.mean("member").values, edges, orientation="horizontal", baseline=None, color=INK, lw=2.2)
+        ax.axvline(0, color=AXIS, lw=0.8)
+        ax.text(0.98, 0.02, note, transform=ax.transAxes, ha="right", va="bottom", color=INK2, fontsize=9)
+        runs = "1 run" if n == 1 else f"mean of {n} members"
+        ax.set_title(name, pad=16)
+        ax.text(0, 1.012, f"{experiment_label(experiment)} · {runs}", transform=ax.transAxes, va="bottom",
+                color=INK2, fontsize=8.5)
+        ax.set(xlabel=xlabel or (f"Ocean-mean OHC change per band [{unit}]" if per_area else f"OHC change per band [{unit}]"),
+               ylabel="Latitude")
+    for ax in flat[len(items):]:
+        ax.set_visible(False)
+    edges = np.asarray(items[0][2].attrs["lat_edges"])
+    ticks = np.arange(-90, 91, 30)
+    flat[0].set_ylim(edges[0], edges[-1])
+    flat[0].set_yticks(ticks, [_lat_label(t) for t in ticks])
+    for ax in flat[:len(items)]:
+        ax.label_outer()
+    width = edges[1] - edges[0]
+    what = "total, ocean mean" if per_area else "total"
+    handles = [Line2D([], [], color=INK, lw=2.2, label=f"{what} per {width:g}° band (ensemble mean for ensembles)")]
+    if any(da.sizes["member"] > 1 for _, _, da in items):
+        handles.append(Line2D([], [], color=MUTED, lw=0.8, label="total, member min–max"))
+    handles += [Patch(color=c, label=l) for l, c in zip(LAYERS, LAYER_COLORS)]
+    fig.legend(handles=handles, loc="outside lower center", ncol=len(handles), fontsize=9)
+
+
 # --- Scenario period vs. a baseline period from another experiment -----------------------------------------------
 
 def find_experiment(experiments, family, label):
