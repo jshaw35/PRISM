@@ -1,0 +1,20 @@
+#!/bin/bash -l
+#PBS -N zonal_toa_fluxes
+#PBS -A UCUB0207
+#PBS -l select=1:ncpus=4:mem=24GB
+#PBS -l walltime=00:30:00
+#PBS -q casper
+#PBS -j oe
+#PBS -o /glade/work/wkamp/GEO/PRISM/PRISM/OHC_levels/zonal_toa_fluxes.log
+
+# Annual 2035-2069 zonal ASR (FSNT), OLR (FLNT), EEI and iEEI in 5-degree latitude bands, band totals and band
+# means, for SSP2-4.5, ARISE-1.5 and ARISE-1.0 (members 001-010 each), for zonal_means.ipynb. Writes
+# OHC_levels/data/zonal_toa_fluxes_annual_2035-2069.nc. See the docstring of zonal_toa_fluxes.py for conventions.
+#
+# Submit with:  qsub /glade/work/wkamp/GEO/PRISM/PRISM/OHC_levels/zonal_toa_fluxes.pbs
+
+module load conda
+conda activate /glade/work/wkamp/conda-envs/wk_MHWs
+
+cd /glade/work/wkamp/GEO/PRISM/PRISM/OHC_levels
+python zonal_toa_fluxes.py --start 2035 --end 2069 --band-width 5 --workers 4  # match ncpus above (PBS sets NCPUS=1 on Casper)

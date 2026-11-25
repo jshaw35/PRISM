@@ -595,6 +595,125 @@ def plot_zonal_layer_grid(fig, axes, items, xlabel=None, per_area=False):
     fig.legend(handles=handles, loc="outside lower center", ncol=len(handles), fontsize=9)
 
 
+# --- Zonal top-of-atmosphere radiative fluxes (from zonal_toa_fluxes.py) ------------------------------------------
+
+ZONAL_TOA_PATH = "/glade/work/wkamp/GEO/PRISM/PRISM/OHC_levels/data/zonal_toa_fluxes_annual_2035-2069.nc"
+
+
+def load_zonal_toa(path=ZONAL_TOA_PATH):
+    """Annual band totals and band means of ASR, OLR, EEI and iEEI from zonal_toa_fluxes.py, dims (condition,
+    member, year, lat). The bands were built on the CAM grid: band_area_m2 is the whole band (land + ocean), equal
+    to the exact spherical band area, not the POP ocean area used for OHC. Checks that before returning."""
+    ds = xr.load_dataset(path)
+    edges = np.asarray(ds.attrs["lat_edges"])
+    exact = 0.5 * ds.attrs["earth_area_m2"] * np.diff(np.sin(np.deg2rad(edges)))
+    if not np.allclose(ds["band_area_m2"].values, exact, rtol=1e-9):
+        raise ValueError(f"{path}: band areas aren't the exact spherical band areas. Either the file is from an "
+                         "older zonal_toa_fluxes.py (which binned whole CAM rows by center latitude) -- rerun it -- or "
+                         "this kernel opened the file before it was rewritten and is reading a stale copy -- restart "
+                         "the kernel.")
+    return ds
+
+
+def plot_zonal_flux_grid(fig, axes, items, edges, xlabel, color, note, total_label):
+    """Single-variable counterpart of plot_zonal_layer_grid: one panel per condition, latitude on y, the band value
+    on x as a filled bar (member mean) with a black step outline, thin gray outlines for the members' min-max, and
+    a corner note. Panels share both axes.
+    items: [(name, (family, experiment), da (member, lat) already in plot units, note value), ...];
+    note: format string for the note value, e.g. "global total {:+.0f} ZJ"."""
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
+
+    edges = np.asarray(edges)
+    bottom, height = edges[:-1], np.diff(edges)
+    flat = np.ravel(axes)
+    for ax, (name, (family, experiment), da, note_value) in zip(flat, items):
+        n = da.sizes["member"]
+        mean = da.mean("member").values
+        ax.barh(bottom, mean, height=height, align="edge", color=color, alpha=0.55, edgecolor=SURFACE, linewidth=0.4)
+        if n > 1:
+            for stat in ("min", "max"):
+                ax.stairs(getattr(da, stat)("member").values, edges, orientation="horizontal", baseline=None,
+                          color=MUTED, lw=0.8)
+        ax.stairs(mean, edges, orientation="horizontal", baseline=None, color=INK, lw=2.2)
+        ax.axvline(0, color=AXIS, lw=0.8)
+        ax.text(0.98, 0.02, note.format(note_value), transform=ax.transAxes, ha="right", va="bottom", color=INK2,
+                fontsize=9)
+        runs = "1 run" if n == 1 else f"mean of {n} members"
+        ax.set_title(name, pad=16)
+        ax.text(0, 1.012, f"{experiment_label(experiment)} · {runs}", transform=ax.transAxes, va="bottom",
+                color=INK2, fontsize=8.5)
+        ax.set(xlabel=xlabel, ylabel="Latitude")
+    for ax in flat[len(items):]:
+        ax.set_visible(False)
+    ticks = np.arange(-90, 91, 30)
+    flat[0].set_ylim(edges[0], edges[-1])
+    flat[0].set_yticks(ticks, [_lat_label(t) for t in ticks])
+    for ax in flat[:len(items)]:
+        ax.label_outer()
+    width = edges[1] - edges[0]
+    handles = [Line2D([], [], color=INK, lw=2.2, label=f"{total_label} per {width:g}° band (ensemble mean)")]
+    if any(da.sizes["member"] > 1 for _, _, da, _ in items):
+        handles.append(Line2D([], [], color=MUTED, lw=0.8, label="member min–max"))
+    fig.legend(handles=handles, loc="outside lower center", ncol=len(handles), fontsize=9)
+
+
+def plot_zonal_flux_comparison(fig, axes, panels, edges, colors, note_label, notes=True, grid=True, zero_line="auto",
+                               lw=1.6, fontsize=None, suptitle=None):
+    """Conditions overlaid: one panel per variable, latitude on y, and for every condition its ensemble-mean band
+    value as an unfilled step outline in the condition's color. Each panel's note lists every condition's global
+    value in the same color, placed where it covers the fewest lines, on a background that hides lines behind it. Panels share the latitude axis; each variable
+    keeps its own x axis.
+    panels: [(title, xlabel, {condition: da (member, lat) already in plot units}, note format e.g. "{:+.2f} PW",
+              {condition: note value}), ...];
+    colors: {condition: color}, also the legend order; note_label: heading of the note, e.g. "global total".
+    notes: False leaves out the global-value notes. grid: False removes the grid lines. zero_line: "auto" draws the
+    x = 0 line (and so includes zero) only when the values change sign, True always, False never. lw: condition line
+    width. fontsize: size of every text except the panel titles -- tick labels, axis labels, notes, legend and
+    suptitle (None keeps the defaults). suptitle: optional figure title."""
+    from matplotlib.lines import Line2D
+    from matplotlib.ticker import MaxNLocator
+
+    edges = np.asarray(edges)
+    flat = np.ravel(axes)
+    note_size, legend_size = (fontsize, fontsize) if fontsize else (8.5, 9)
+    for ax, (title, xlabel, values, note, note_values) in zip(flat, panels):
+        lines = []
+        for name, color in colors.items():
+            mean = values[name].mean("member").values
+            lines.append(mean)
+            ax.stairs(mean, edges, orientation="horizontal", baseline=None, color=color, lw=lw)
+        if zero_line is True or (zero_line == "auto" and np.nanmin(lines) < 0 < np.nanmax(lines)):
+            ax.axvline(0, color=AXIS, lw=0.8)
+        if notes:
+            handles = [Line2D([], [], color=c, label=f"{name}  {note.format(note_values[name])}")
+                       for name, c in colors.items()]
+            ax.legend(handles=handles, title=note_label, loc="best", handlelength=0, handletextpad=0,
+                      labelcolor="linecolor", fontsize=note_size, title_fontsize=note_size, alignment="right",
+                      frameon=True, facecolor=SURFACE, edgecolor="none", framealpha=0.9)
+        ax.grid(grid)
+        ax.set_title(title)
+        ax.set(xlabel=xlabel, ylabel="Latitude")
+        if fontsize:
+            ax.tick_params(labelsize=fontsize)
+            ax.xaxis.set_major_locator(MaxNLocator(nbins=6, steps=[1, 2, 2.5, 5, 10]))  # larger labels need fewer ticks
+            ax.xaxis.label.set_size(fontsize)
+            ax.yaxis.label.set_size(fontsize)
+    for ax in flat[len(panels):]:
+        ax.set_visible(False)
+    ticks = np.arange(-90, 91, 30)
+    flat[0].set_ylim(edges[0], edges[-1])
+    flat[0].set_yticks(ticks, [_lat_label(t) for t in ticks])
+    for ax in flat[1:len(panels)]:
+        ax.set_ylabel("")
+    n = {values[name].sizes["member"] for _, _, values, _, _ in panels for name in colors}
+    runs = f"mean of {n.pop()} members" if len(n) == 1 else "ensemble mean"
+    handles = [Line2D([], [], color=c, lw=lw, label=f"{name} ({runs})") for name, c in colors.items()]
+    fig.legend(handles=handles, loc="outside lower center", ncol=len(handles), fontsize=legend_size)
+    if suptitle:
+        fig.suptitle(suptitle, color=INK2, fontsize=fontsize or 11)
+
+
 # --- Scenario period vs. a baseline period from another experiment -----------------------------------------------
 
 def find_experiment(experiments, family, label):
